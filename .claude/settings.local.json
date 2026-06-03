@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(if \\(-not $?\\) { \"Directory is empty or doesn't exist\" })",
+      "Bash(mkdir -p \"C:\\\\Users\\\\chuan\\\\OneDrive\\\\Desktop\\\\lense\\\\.claude\" 2>/dev/null; echo done)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(start http://localhost:3000)"
+    ]
+  }
+}
