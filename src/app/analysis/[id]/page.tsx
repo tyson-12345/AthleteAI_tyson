@@ -1,419 +1,244 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft, Play, Pause, SkipBack, SkipForward, Layers,
-  AlertTriangle, CheckCircle2, Info, ChevronRight, Dumbbell,
-  Flame, Target, Activity, Share2,
-} from "lucide-react";
-import { Nav } from "@/components/Nav";
+import { Layers, CheckCircle2, AlertTriangle, Info, ChevronRight, Dumbbell, Share2, GitCompare } from "lucide-react";
+import Link from "next/link";
+import { BottomNav } from "@/components/BottomNav";
+import { TopBar } from "@/components/TopBar";
 import { ScoreRing } from "@/components/ScoreRing";
-import { MetricBar } from "@/components/MetricBar";
 import { SkeletonViewer } from "@/components/SkeletonViewer";
 import { MOCK_ANALYSES } from "@/lib/athleteData";
 
-const SEVERITY_COLORS = {
-  info: { bg: "rgba(14,165,233,0.1)", border: "rgba(14,165,233,0.25)", text: "#38bdf8", icon: Info },
-  warning: { bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.25)", text: "#eab308", icon: AlertTriangle },
-  critical: { bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.25)", text: "#ef4444", icon: AlertTriangle },
+const SEV = {
+  info:     { bg: "rgba(6,182,212,0.09)",   border: "rgba(6,182,212,0.22)",   text: "#22d3ee", icon: Info },
+  warning:  { bg: "rgba(245,158,11,0.09)",  border: "rgba(245,158,11,0.22)",  text: "#f59e0b", icon: AlertTriangle },
+  critical: { bg: "rgba(244,63,94,0.09)",   border: "rgba(244,63,94,0.22)",   text: "#f43f5e", icon: AlertTriangle },
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  technique: "Technique",
-  "injury-risk": "Injury Risk",
-  strength: "Strength",
-  mobility: "Mobility",
-  timing: "Timing",
-};
-
-type Params = { id: string };
-
-export default function AnalysisPage({ params }: { params: Promise<Params> }) {
-  // Demo: resolve to first analysis regardless of id
+export default function AnalysisPage() {
   const analysis = MOCK_ANALYSES[0];
-  const [playing, setPlaying] = useState(false);
+  const [tab, setTab] = useState<"coaching" | "injury" | "drills">("coaching");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [activeTab, setActiveTab] = useState<"coaching" | "injury" | "drills">("coaching");
-  const [selectedTip, setSelectedTip] = useState<string | null>(null);
 
-  const highlightJoints = analysis.injuryRisks
-    .filter((r) => r.risk > 30)
-    .map((r) => r.joint);
+  const highlightJoints = analysis.injuryRisks.filter(r => r.risk > 30).map(r => r.joint);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
-      <Nav />
-
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header
-          className="shrink-0 px-6 py-4 flex items-center gap-4"
-          style={{ borderBottom: "1px solid var(--border)", background: "rgba(8,12,20,0.8)", backdropFilter: "blur(20px)" }}
-        >
-          <Link href="/dashboard">
-            <button className="p-2 rounded-lg transition-all" style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-secondary)")}
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          </Link>
-          <div className="flex-1">
-            <h1 className="font-bold text-base" style={{ color: "var(--text-primary)" }}>{analysis.title}</h1>
-            <p className="text-xs capitalize" style={{ color: "var(--text-tertiary)" }}>
-              {analysis.sport} · {analysis.duration}s · {new Date(analysis.uploadedAt).toLocaleDateString()}
-            </p>
-          </div>
+    <div className="min-h-screen mb-nav" style={{ background: "var(--bg)" }}>
+      <TopBar
+        title={analysis.title}
+        showBack
+        right={
           <div className="flex items-center gap-2">
             <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
-              style={{ background: showSkeleton ? "rgba(14,165,233,0.15)" : "rgba(255,255,255,0.05)", color: showSkeleton ? "#38bdf8" : "var(--text-secondary)", border: `1px solid ${showSkeleton ? "rgba(14,165,233,0.3)" : "rgba(255,255,255,0.08)"}` }}
               onClick={() => setShowSkeleton(!showSkeleton)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                background: showSkeleton ? "rgba(6,182,212,0.14)" : "rgba(255,255,255,0.06)",
+                color: showSkeleton ? "#22d3ee" : "var(--text-tertiary)",
+                border: `1px solid ${showSkeleton ? "rgba(6,182,212,0.28)" : "rgba(255,255,255,0.08)"}`,
+              }}
             >
-              <Layers className="w-3.5 h-3.5" />
-              Skeleton
+              <Layers className="w-3.5 h-3.5" /> AI
             </button>
-            <button className="p-2 rounded-lg" style={{ color: "var(--text-tertiary)", border: "1px solid var(--border)" }}>
-              <Share2 className="w-4 h-4" />
+            <button className="w-8 h-8 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.06)" }}>
+              <Share2 className="w-4 h-4" style={{ color: "var(--text-tertiary)" }} />
             </button>
           </div>
-        </header>
+        }
+      />
 
-        {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Video + Skeleton panel */}
-          <div className="flex-1 flex flex-col overflow-hidden p-4 gap-4">
-            {/* Video area */}
-            <div
-              className="relative flex-1 rounded-2xl overflow-hidden"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", minHeight: 0 }}
-            >
-              {showSkeleton ? (
-                <div className="absolute inset-0">
-                  <SkeletonViewer
-                    sport={analysis.sport}
-                    highlightJoints={highlightJoints}
-                    variant="deadlift"
-                    animated={playing}
-                    className="h-full w-full border-0 rounded-none"
-                  />
-                </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-6xl opacity-20">🏋️</div>
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ background: "linear-gradient(135deg, var(--surface), var(--surface-2))" }}
-                  >
-                    <div className="text-center">
-                      <div className="text-4xl mb-3">🏋️</div>
-                      <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>Video preview</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Playback controls */}
-              <div
-                className="absolute bottom-0 left-0 right-0 p-4"
-                style={{ background: "linear-gradient(to top, rgba(8,12,20,0.9) 0%, transparent 100%)" }}
-              >
-                {/* Scrubber */}
-                <div
-                  className="w-full h-1 rounded-full mb-3 cursor-pointer"
-                  style={{ background: "rgba(255,255,255,0.15)" }}
-                >
-                  <div className="h-full w-1/3 rounded-full" style={{ background: "#0ea5e9" }} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <button className="p-1.5 rounded-lg" style={{ color: "var(--text-secondary)" }}>
-                      <SkipBack className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="w-8 h-8 rounded-full flex items-center justify-center"
-                      style={{ background: "#0ea5e9", boxShadow: "0 0 12px rgba(14,165,233,0.4)" }}
-                      onClick={() => setPlaying(!playing)}
-                    >
-                      {playing ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
-                    </button>
-                    <button className="p-1.5 rounded-lg" style={{ color: "var(--text-secondary)" }}>
-                      <SkipForward className="w-4 h-4" />
-                    </button>
-                    <span className="text-xs ml-2" style={{ color: "var(--text-tertiary)" }}>0:04 / 0:{analysis.duration.toString().padStart(2, "0")}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {["0.25x", "0.5x", "1x", "2x"].map((speed) => (
-                      <button
-                        key={speed}
-                        className="text-xs px-2 py-0.5 rounded"
-                        style={{
-                          background: speed === "1x" ? "rgba(14,165,233,0.2)" : "transparent",
-                          color: speed === "1x" ? "#38bdf8" : "var(--text-tertiary)",
-                        }}
-                      >
-                        {speed}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {/* ── Skeleton / Video ── */}
+      <div className="px-4 pt-3">
+        <div className="rounded-2xl overflow-hidden" style={{ height: 240 }}>
+          {showSkeleton ? (
+            <SkeletonViewer sport={analysis.sport} variant="deadlift" highlightJoints={highlightJoints} className="h-full border-0 rounded-none" />
+          ) : (
+            <div className="h-full flex items-center justify-center rounded-2xl"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <div className="text-center">
+                <div className="text-4xl mb-2">🏋️</div>
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>Video preview</p>
               </div>
             </div>
-
-            {/* Joint angles row */}
-            <div className="grid grid-cols-3 gap-3 shrink-0">
-              {[
-                { joint: "Hip Angle", value: "112°", optimal: "95°", status: "warning" },
-                { joint: "Knee Angle", value: "165°", optimal: "160-170°", status: "good" },
-                { joint: "Lumbar", value: "18°", optimal: "<10°", status: "danger" },
-              ].map((j) => (
-                <div
-                  key={j.joint}
-                  className="p-3 rounded-xl"
-                  style={{
-                    background: "var(--surface)",
-                    border: `1px solid ${j.status === "danger" ? "rgba(239,68,68,0.25)" : j.status === "warning" ? "rgba(234,179,8,0.2)" : "var(--border)"}`,
-                  }}
-                >
-                  <div className="text-xs mb-1" style={{ color: "var(--text-tertiary)" }}>{j.joint}</div>
-                  <div
-                    className="text-lg font-black"
-                    style={{ color: j.status === "danger" ? "#ef4444" : j.status === "warning" ? "#eab308" : "#22c55e" }}
-                  >
-                    {j.value}
-                  </div>
-                  <div className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                    Optimal: {j.optimal}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right panel: analysis */}
-          <div
-            className="w-80 flex flex-col shrink-0 overflow-hidden"
-            style={{ borderLeft: "1px solid var(--border)" }}
-          >
-            {/* Scores */}
-            <div className="p-4" style={{ borderBottom: "1px solid var(--border)" }}>
-              <div className="flex items-center justify-around">
-                <ScoreRing score={analysis.scores.overall} size={72} label="Overall" />
-                <ScoreRing score={analysis.scores.technique} size={60} color="#8b5cf6" label="Technique" />
-                <ScoreRing score={analysis.scores.power} size={60} color="#22c55e" label="Power" />
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
-              {(["coaching", "injury", "drills"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className="flex-1 py-3 text-xs font-semibold capitalize transition-all"
-                  style={{
-                    color: activeTab === tab ? "#38bdf8" : "var(--text-tertiary)",
-                    borderBottom: activeTab === tab ? "2px solid #0ea5e9" : "2px solid transparent",
-                    background: activeTab === tab ? "rgba(14,165,233,0.05)" : "transparent",
-                  }}
-                >
-                  {tab === "injury" ? "Injury Risk" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <AnimatePresence mode="wait">
-                {activeTab === "coaching" && (
-                  <motion.div
-                    key="coaching"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="space-y-3"
-                  >
-                    {/* Strengths */}
-                    <div>
-                      <h3 className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: "#22c55e" }}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> What You&apos;re Doing Right
-                      </h3>
-                      <div className="space-y-2">
-                        {analysis.strengths.map((s) => (
-                          <div key={s} className="flex items-start gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: "#22c55e" }} />
-                            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{s}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Tips */}
-                    <div>
-                      <h3 className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: "#eab308" }}>
-                        <Target className="w-3.5 h-3.5" /> Coaching Tips
-                      </h3>
-                      <div className="space-y-2">
-                        {analysis.tips.map((tip) => {
-                          const colors = SEVERITY_COLORS[tip.severity];
-                          const Icon = colors.icon;
-                          const expanded = selectedTip === tip.id;
-                          return (
-                            <motion.div
-                              key={tip.id}
-                              layout
-                              className="rounded-xl overflow-hidden cursor-pointer"
-                              style={{ background: colors.bg, border: `1px solid ${colors.border}` }}
-                              onClick={() => setSelectedTip(expanded ? null : tip.id)}
-                            >
-                              <div className="flex items-center gap-2 p-3">
-                                <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: colors.text }} />
-                                <span className="text-xs font-semibold flex-1" style={{ color: colors.text }}>
-                                  {tip.title}
-                                </span>
-                                <ChevronRight
-                                  className="w-3.5 h-3.5 shrink-0 transition-transform"
-                                  style={{ color: colors.text, transform: expanded ? "rotate(90deg)" : "none" }}
-                                />
-                              </div>
-                              <AnimatePresence>
-                                {expanded && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    className="px-3 pb-3"
-                                  >
-                                    <p className="text-xs leading-relaxed mb-2" style={{ color: "var(--text-secondary)" }}>
-                                      {tip.description}
-                                    </p>
-                                    {tip.drill && (
-                                      <div
-                                        className="p-2 rounded-lg"
-                                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                                      >
-                                        <div className="flex items-center gap-1 mb-1">
-                                          <Dumbbell className="w-3 h-3" style={{ color: "#38bdf8" }} />
-                                          <span className="text-xs font-semibold" style={{ color: "#38bdf8" }}>Drill</span>
-                                        </div>
-                                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{tip.drill}</p>
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {activeTab === "injury" && (
-                  <motion.div
-                    key="injury"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="space-y-4"
-                  >
-                    {analysis.injuryRisks.map((risk) => {
-                      const color = risk.risk > 50 ? "#ef4444" : risk.risk > 30 ? "#eab308" : "#22c55e";
-                      return (
-                        <div key={risk.joint} className="p-4 rounded-xl" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{risk.joint}</span>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-                              <span className="text-sm font-bold" style={{ color }}>{risk.risk}%</span>
-                            </div>
-                          </div>
-                          <div className="h-1.5 rounded-full mb-3" style={{ background: "rgba(255,255,255,0.06)" }}>
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${risk.risk}%`, background: `linear-gradient(90deg, ${color}80, ${color})` }}
-                            />
-                          </div>
-                          <p className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>{risk.description}</p>
-                          <div className="flex items-start gap-1.5">
-                            <Activity className="w-3 h-3 mt-0.5 shrink-0" style={{ color: "#38bdf8" }} />
-                            <p className="text-xs" style={{ color: "#38bdf8" }}>{risk.prevention}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </motion.div>
-                )}
-
-                {activeTab === "drills" && (
-                  <motion.div
-                    key="drills"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="space-y-3"
-                  >
-                    <p className="text-xs mb-4" style={{ color: "var(--text-secondary)" }}>
-                      Personalized drill plan based on your analysis:
-                    </p>
-                    {analysis.improvements.map((imp, i) => (
-                      <div
-                        key={i}
-                        className="p-3 rounded-xl"
-                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                            style={{ background: "rgba(14,165,233,0.15)", color: "#38bdf8" }}
-                          >
-                            {i + 1}
-                          </div>
-                          <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{imp}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {analysis.tips
-                      .filter((t) => t.drill)
-                      .map((t) => (
-                        <div
-                          key={t.id}
-                          className="p-3 rounded-xl"
-                          style={{ background: "rgba(14,165,233,0.06)", border: "1px solid rgba(14,165,233,0.15)" }}
-                        >
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Dumbbell className="w-3.5 h-3.5" style={{ color: "#38bdf8" }} />
-                            <span className="text-xs font-semibold" style={{ color: "#38bdf8" }}>{t.title}</span>
-                          </div>
-                          <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{t.drill}</p>
-                        </div>
-                      ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Compare CTA */}
-            <div className="p-4 shrink-0" style={{ borderTop: "1px solid var(--border)" }}>
-              <Link href="/compare">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
-                  style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)", color: "#a78bfa" }}
-                >
-                  <Flame className="w-4 h-4" />
-                  Compare to Pro Athlete
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </motion.button>
-              </Link>
-            </div>
-          </div>
+          )}
         </div>
-      </main>
+
+        {/* Joint angles */}
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          {[
+            { j: "Hip", v: "112°", opt: "95°", s: "warning" },
+            { j: "Knee", v: "165°", opt: "160-170°", s: "good" },
+            { j: "Lumbar", v: "18°", opt: "<10°", s: "danger" },
+          ].map(({ j, v, opt, s }) => (
+            <div key={j} className="p-3 rounded-xl text-center"
+              style={{
+                background: "var(--surface)",
+                border: `1px solid ${s === "danger" ? "rgba(244,63,94,0.2)" : s === "warning" ? "rgba(245,158,11,0.15)" : "var(--border)"}`,
+              }}>
+              <div className="text-xs mb-1" style={{ color: "var(--text-tertiary)" }}>{j}</div>
+              <div className="text-base font-black"
+                style={{ color: s === "danger" ? "#f43f5e" : s === "warning" ? "#f59e0b" : "#10b981" }}>{v}</div>
+              <div className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{opt}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Score row ── */}
+      <div className="flex items-center justify-around px-4 py-5">
+        <ScoreRing score={analysis.scores.overall} size={76} label="Overall" sublabel="/100" />
+        <ScoreRing score={analysis.scores.technique} size={64} color="#8b5cf6" label="Technique" />
+        <ScoreRing score={analysis.scores.power} size={64} color="#10b981" label="Power" />
+        <ScoreRing score={analysis.scores.balance} size={64} color="#06b6d4" label="Balance" />
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex mx-4 rounded-xl overflow-hidden mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        {(["coaching", "injury", "drills"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className="flex-1 py-2.5 text-xs font-semibold capitalize transition-all"
+            style={{
+              background: tab === t ? "rgba(6,182,212,0.14)" : "transparent",
+              color: tab === t ? "#22d3ee" : "var(--text-tertiary)",
+              borderBottom: tab === t ? "2px solid #06b6d4" : "2px solid transparent",
+            }}>
+            {t === "injury" ? "Injury" : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab content ── */}
+      <div className="px-4 pb-4 space-y-3">
+        <AnimatePresence mode="wait">
+
+          {tab === "coaching" && (
+            <motion.div key="c" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
+              {/* Strengths */}
+              <div className="p-4 rounded-2xl space-y-2"
+                style={{ background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.18)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-4 h-4" style={{ color: "#10b981" }} />
+                  <span className="text-xs font-bold" style={{ color: "#10b981" }}>WHAT YOU'RE DOING RIGHT</span>
+                </div>
+                {analysis.strengths.map((s) => (
+                  <div key={s} className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: "#10b981" }} />
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{s}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tips */}
+              {analysis.tips.map((tip) => {
+                const c = SEV[tip.severity];
+                const Icon = c.icon;
+                const open = expanded === tip.id;
+                return (
+                  <motion.div key={tip.id} layout className="rounded-2xl overflow-hidden"
+                    style={{ background: c.bg, border: `1px solid ${c.border}` }}
+                    onClick={() => setExpanded(open ? null : tip.id)}>
+                    <div className="flex items-center gap-3 p-4">
+                      <Icon className="w-4 h-4 shrink-0" style={{ color: c.text }} />
+                      <span className="text-sm font-semibold flex-1" style={{ color: c.text }}>{tip.title}</span>
+                      <ChevronRight className="w-4 h-4 shrink-0 transition-transform duration-200"
+                        style={{ color: c.text, transform: open ? "rotate(90deg)" : "none" }} />
+                    </div>
+                    <AnimatePresence>
+                      {open && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                          className="px-4 pb-4">
+                          <p className="text-sm leading-relaxed mb-3" style={{ color: "var(--text-secondary)" }}>{tip.description}</p>
+                          {tip.drill && (
+                            <div className="p-3 rounded-xl" style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.15)" }}>
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Dumbbell className="w-3.5 h-3.5" style={{ color: "#22d3ee" }} />
+                                <span className="text-xs font-bold" style={{ color: "#22d3ee" }}>DRILL</span>
+                              </div>
+                              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{tip.drill}</p>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          )}
+
+          {tab === "injury" && (
+            <motion.div key="i" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
+              {analysis.injuryRisks.map((r) => {
+                const col = r.risk > 50 ? "#f43f5e" : r.risk > 30 ? "#f59e0b" : "#10b981";
+                return (
+                  <div key={r.joint} className="p-4 rounded-2xl space-y-3"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>{r.joint}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ background: col }} />
+                        <span className="text-lg font-black" style={{ color: col }}>{r.risk}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${r.risk}%` }} transition={{ duration: 0.8 }}
+                        className="h-full rounded-full" style={{ background: `linear-gradient(90deg, ${col}66, ${col})` }} />
+                    </div>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
+                    <div className="p-2.5 rounded-xl flex items-start gap-2"
+                      style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.12)" }}>
+                      <Dumbbell className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "#22d3ee" }} />
+                      <p className="text-xs leading-relaxed" style={{ color: "#22d3ee" }}>{r.prevention}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </motion.div>
+          )}
+
+          {tab === "drills" && (
+            <motion.div key="d" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
+              <p className="text-sm mb-1" style={{ color: "var(--text-secondary)" }}>Personalized drill plan based on your analysis:</p>
+              {analysis.tips.filter(t => t.drill).map((t, i) => (
+                <div key={t.id} className="p-4 rounded-2xl"
+                  style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.15)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{ background: "rgba(6,182,212,0.2)", color: "#22d3ee" }}>{i + 1}</div>
+                    <span className="text-sm font-semibold" style={{ color: "#22d3ee" }}>{t.title}</span>
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{t.drill}</p>
+                </div>
+              ))}
+              {analysis.improvements.map((imp, i) => (
+                <div key={i} className="flex items-start gap-3 p-4 rounded-2xl"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
+                    style={{ background: "rgba(139,92,246,0.2)", color: "#a78bfa" }}>{i + 1}</div>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{imp}</p>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Compare CTA */}
+        <Link href="/compare">
+          <motion.div whileTap={{ scale: 0.97 }} className="flex items-center gap-3 p-4 rounded-2xl mt-2"
+            style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.22)" }}>
+            <GitCompare className="w-5 h-5" style={{ color: "#a78bfa" }} />
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "#a78bfa" }}>Compare to Pro Athlete</p>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>See how your form stacks up</p>
+            </div>
+            <ChevronRight className="w-4 h-4 ml-auto" style={{ color: "#a78bfa" }} />
+          </motion.div>
+        </Link>
+      </div>
+
+      <BottomNav />
     </div>
   );
 }
