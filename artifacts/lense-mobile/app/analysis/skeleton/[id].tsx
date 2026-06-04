@@ -381,7 +381,7 @@ export default function SkeletonScreen() {
   useEffect(() => {
     const dest = (FileSystem.cacheDirectory ?? "") + "pose-tracker.html";
     FileSystem.writeAsStringAsync(dest, buildHtml(videoUri), {
-      encoding: FileSystem.EncodingType.UTF8,
+      encoding: "utf8" as any,
     })
       .then(() => setHtmlFileUri(dest))
       .catch((e) => console.warn("pose HTML write failed", e));
