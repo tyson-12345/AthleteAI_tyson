@@ -7,27 +7,31 @@ import {
   Platform,
   Dimensions,
   ScrollView,
+  GestureResponderEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import * as ScreenOrientation from "expo-screen-orientation";
-import Svg, {
-  Line,
-  Circle,
-  G,
-  Ellipse,
-  Text as SvgText,
-  Defs,
-  RadialGradient,
-  Stop,
-} from "react-native-svg";
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import { Circle, Line, Ellipse, Defs, RadialGradient, Stop } from "react-native-svg";
+import Svg from "react-native-svg";
 
 import { useColors } from "@/hooks/useColors";
 import { useAnalyses } from "@/lib/analysesStore";
 
-// ── Pose definitions (base joint positions in a 320×380 viewport) ──
+// ── Animated SVG primitives ────────────────────────────────────────────────
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedLine   = Animated.createAnimatedComponent(Line);
+
+// ── Pose definitions ───────────────────────────────────────────────────────
 const POSES: Record<string, {
   label: string;
   joints: Record<string, [number, number]>;
@@ -119,79 +123,187 @@ const POSES: Record<string, {
   },
 };
 
-const SVG_W = 320;
-const SVG_H = 380;
-
-// Per-joint phase offsets so motion is independent, naturalistic
-const JOINT_PHASES: Record<string, number> = {
+// Per-joint phase offset and motion amplitude
+const JOINT_PHASE: Record<string, number> = {
   head: 0, neck: 0.3, spine1: 0.1, spine2: 0.6, spine3: 0.9,
   rShoulder: 1.2, lShoulder: 0.8, rElbow: 1.8, lElbow: 1.4,
   rWrist: 2.4, lWrist: 2.0, rHip: 0.5, lHip: 0.7,
   rKnee: 1.1, lKnee: 1.3, rAnkle: 1.7, lAnkle: 1.9,
 };
-
-// Animate amplitude per joint (extremities move more)
 const JOINT_AMP: Record<string, number> = {
-  head: 0.6, neck: 0.4, spine1: 0.3, spine2: 0.5, spine3: 0.6,
-  rShoulder: 0.7, lShoulder: 0.7, rElbow: 1.2, lElbow: 1.2,
-  rWrist: 1.8, lWrist: 1.8, rHip: 0.5, lHip: 0.5,
-  rKnee: 1.0, lKnee: 1.0, rAnkle: 1.4, lAnkle: 1.4,
+  head: 0.5, neck: 0.35, spine1: 0.25, spine2: 0.45, spine3: 0.55,
+  rShoulder: 0.6, lShoulder: 0.6, rElbow: 1.1, lElbow: 1.1,
+  rWrist: 1.6, lWrist: 1.6, rHip: 0.45, lHip: 0.45,
+  rKnee: 0.9, lKnee: 0.9, rAnkle: 1.3, lAnkle: 1.3,
 };
 
-function getRiskJoints(injuryRisks: { joint: string; risk: number }[]): Record<string, number> {
+const SVG_W = 320;
+const SVG_H = 380;
+
+// ── Risk helpers ────────────────────────────────────────────────────────────
+function getRiskJoints(risks: { joint: string; risk: number }[]) {
   const map: Record<string, number> = {};
-  injuryRisks.forEach((r) => {
-    const j = r.joint.toLowerCase();
+  risks.forEach(({ joint, risk }) => {
+    const j = joint.toLowerCase();
     if (j.includes("lumbar") || j.includes("back") || j.includes("spine")) {
-      map["spine2"] = r.risk; map["spine3"] = r.risk;
+      map.spine2 = risk; map.spine3 = risk;
     }
     if (j.includes("knee")) {
-      if (j.includes("left")) map["lKnee"] = r.risk;
-      else if (j.includes("right")) map["rKnee"] = r.risk;
-      else { map["lKnee"] = r.risk; map["rKnee"] = r.risk; }
+      if (j.includes("left")) map.lKnee = risk;
+      else if (j.includes("right")) map.rKnee = risk;
+      else { map.lKnee = risk; map.rKnee = risk; }
     }
-    if (j.includes("hip")) {
-      if (j.includes("left")) map["lHip"] = r.risk;
-      else map["rHip"] = r.risk;
-    }
-    if (j.includes("shoulder")) {
-      if (j.includes("right")) map["rShoulder"] = r.risk;
-      else map["lShoulder"] = r.risk;
-    }
-    if (j.includes("ankle")) { map["rAnkle"] = r.risk; map["lAnkle"] = r.risk; }
-    if (j.includes("wrist")) { map["rWrist"] = r.risk; }
-    if (j.includes("elbow")) { map["rElbow"] = r.risk; }
+    if (j.includes("hip"))       { if (j.includes("left")) map.lHip = risk; else map.rHip = risk; }
+    if (j.includes("shoulder"))  { if (j.includes("right")) map.rShoulder = risk; else map.lShoulder = risk; }
+    if (j.includes("ankle"))     { map.rAnkle = risk; map.lAnkle = risk; }
+    if (j.includes("wrist"))     { map.rWrist = risk; }
+    if (j.includes("elbow"))     { map.rElbow = risk; }
   });
   return map;
 }
 
-function jointColor(risk: number | undefined) {
-  if (risk === undefined) return "#6c63ff";
+function jColor(risk?: number) {
+  if (!risk) return "#6c63ff";
   if (risk >= 50) return "#ef4444";
   if (risk >= 25) return "#f59e0b";
   return "#22c55e";
 }
-function jointGlow(risk: number | undefined) {
-  if (risk === undefined) return "#6c63ff44";
+function jGlow(risk?: number) {
+  if (!risk) return "#6c63ff44";
   if (risk >= 50) return "#ef444466";
   if (risk >= 25) return "#f59e0b55";
   return "#22c55e44";
 }
+function boneColor(riskA: number, riskB: number) {
+  const m = Math.max(riskA, riskB);
+  if (m >= 50) return "#ef444499";
+  if (m >= 25) return "#f59e0b99";
+  return "#6c63ffaa";
+}
 
+// ── Animated joint dot (Reanimated, runs on UI thread) ─────────────────────
+function JointDot({
+  bx, by, name, phase, risk,
+}: {
+  bx: number; by: number; name: string;
+  phase: Animated.SharedValue<number>; risk?: number;
+}) {
+  const ph  = JOINT_PHASE[name] ?? 0;
+  const amp = JOINT_AMP[name]   ?? 0.8;
+  const isHead = name === "head";
+  const r   = isHead ? 14 : 6;
+  const color = jColor(risk);
+  const glow  = jGlow(risk);
+
+  const glowProps = useAnimatedProps(() => ({
+    cx: bx + Math.sin(phase.value + ph) * amp,
+    cy: by + Math.cos(phase.value * 0.7 + ph + 1) * amp * 0.6,
+  }));
+  const dotProps = useAnimatedProps(() => ({
+    cx: bx + Math.sin(phase.value + ph) * amp,
+    cy: by + Math.cos(phase.value * 0.7 + ph + 1) * amp * 0.6,
+  }));
+
+  return (
+    <>
+      <AnimatedCircle animatedProps={glowProps} r={r + 7} fill={glow} />
+      <AnimatedCircle animatedProps={dotProps}  r={r} fill="#05050a" stroke={color} strokeWidth={2.5} />
+    </>
+  );
+}
+
+// ── Animated bone segment ──────────────────────────────────────────────────
+function BoneSegment({
+  ax, ay, bx, by, nameA, nameB, phase, riskA, riskB,
+}: {
+  ax: number; ay: number; bx: number; by: number;
+  nameA: string; nameB: string;
+  phase: Animated.SharedValue<number>;
+  riskA: number; riskB: number;
+}) {
+  const phA = JOINT_PHASE[nameA] ?? 0;
+  const phB = JOINT_PHASE[nameB] ?? 0;
+  const ampA = JOINT_AMP[nameA] ?? 0.8;
+  const ampB = JOINT_AMP[nameB] ?? 0.8;
+  const color = boneColor(riskA, riskB);
+
+  const lineProps = useAnimatedProps(() => ({
+    x1: ax + Math.sin(phase.value + phA) * ampA,
+    y1: ay + Math.cos(phase.value * 0.7 + phA + 1) * ampA * 0.6,
+    x2: bx + Math.sin(phase.value + phB) * ampB,
+    y2: by + Math.cos(phase.value * 0.7 + phB + 1) * ampB * 0.6,
+  }));
+
+  return (
+    <AnimatedLine
+      animatedProps={lineProps}
+      stroke={color}
+      strokeWidth={3.5}
+      strokeLinecap="round"
+    />
+  );
+}
+
+// ── Utility: format mm:ss ───────────────────────────────────────────────────
+function fmtTime(ms: number) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// ── Main screen ────────────────────────────────────────────────────────────
 export default function SkeletonScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const { id }        = useLocalSearchParams<{ id: string }>();
+  const colors        = useColors();
+  const insets        = useSafeAreaInsets();
+  const router        = useRouter();
+  const videoRef      = useRef<Video>(null);
 
   const { analyses, videoUris } = useAnalyses();
   const analysis = analyses.find((a) => a.id === id);
   const videoUri = id ? videoUris[id] : undefined;
 
-  // ── Screen orientation ──
+  // ── Video playback state ──────────────────────────────────────────────
+  const [isPlaying,       setIsPlaying]       = useState(true);
+  const [positionMs,      setPositionMs]       = useState(0);
+  const [durationMs,      setDurationMs]       = useState(1);
+  const [scrubberWidth,   setScrubberWidth]    = useState(1);
+
+  function onPlaybackUpdate(s: AVPlaybackStatus) {
+    if (!s.isLoaded) return;
+    setIsPlaying(s.isPlaying);
+    setPositionMs(s.positionMillis ?? 0);
+    setDurationMs(s.durationMillis ?? 1);
+  }
+
+  function togglePlay() {
+    videoRef.current?.setStatusAsync({ shouldPlay: !isPlaying });
+  }
+
+  function handleScrubberTouch(e: GestureResponderEvent, finalSeek = false) {
+    const x   = Math.max(0, e.nativeEvent.locationX);
+    const pct = Math.min(1, x / scrubberWidth);
+    const pos = pct * durationMs;
+    // Pause while scrubbing for responsiveness
+    if (!finalSeek) videoRef.current?.setStatusAsync({ shouldPlay: false });
+    videoRef.current?.setPositionAsync(pos);
+    if (finalSeek) videoRef.current?.setStatusAsync({ shouldPlay: isPlaying });
+  }
+
+  // ── Skeleton animation (Reanimated — UI thread) ───────────────────────
+  const phase = useSharedValue(0);
+
+  useEffect(() => {
+    phase.value = withRepeat(
+      withTiming(Math.PI * 2, { duration: 4000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+
+  // ── Screen orientation ────────────────────────────────────────────────
   const [isLandscape, setIsLandscape] = useState(() => {
-    const { width, height } = Dimensions.get("window");
-    return width > height;
+    const d = Dimensions.get("window");
+    return d.width > d.height;
   });
 
   useEffect(() => {
@@ -199,16 +311,15 @@ export default function SkeletonScreen() {
       const o = e.orientationInfo.orientation;
       setIsLandscape(
         o === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-        o === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+        o === ScreenOrientation.Orientation.LANDSCAPE_RIGHT,
       );
     });
-    // Also update on mount via Dimensions
-    const dimSub = Dimensions.addEventListener("change", ({ window }) => {
-      setIsLandscape(window.width > window.height);
-    });
+    const dim = Dimensions.addEventListener("change", ({ window }) =>
+      setIsLandscape(window.width > window.height),
+    );
     return () => {
       ScreenOrientation.removeOrientationChangeListener(sub);
-      dimSub.remove();
+      dim.remove();
     };
   }, []);
 
@@ -220,54 +331,25 @@ export default function SkeletonScreen() {
     }
   }
 
-  // Unlock when leaving screen
-  useEffect(() => {
-    return () => {
-      ScreenOrientation.unlockAsync().catch(() => {});
-    };
-  }, []);
+  useEffect(() => () => { ScreenOrientation.unlockAsync().catch(() => {}); }, []);
 
-  // ── Animated skeleton (phase-driven wobble) ──
-  const phaseRef = useRef(0);
-  const [animTick, setAnimTick] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      phaseRef.current += 0.04; // ~24 fps smooth
-      setAnimTick((t) => t + 1);
-    }, 42);
-    return () => clearInterval(interval);
-  }, []);
-
-  const pose = POSES[analysis?.sport ?? ""] ?? POSES.weightlifting;
-  const riskJoints = analysis ? getRiskJoints(analysis.injuryRisks) : {};
-
-  // Compute animated joint positions
-  const animatedJoints = useCallback((): Record<string, [number, number]> => {
-    const phase = phaseRef.current;
-    const result: Record<string, [number, number]> = {};
-    for (const [name, [bx, by]] of Object.entries(pose.joints)) {
-      const ph = JOINT_PHASES[name] ?? 0;
-      const amp = JOINT_AMP[name] ?? 0.8;
-      const dx = Math.sin(phase + ph) * amp;
-      const dy = Math.cos(phase * 0.7 + ph + 1) * amp * 0.6;
-      result[name] = [bx + dx, by + dy];
-    }
-    return result;
-  }, [pose, animTick]); // animTick triggers re-compute
-
-  const dims = Dimensions.get("window");
-  const screenW = dims.width;
-  const screenH = dims.height;
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  // ── Layout ────────────────────────────────────────────────────────────
+  const dims       = Dimensions.get("window");
+  const screenW    = dims.width;
+  const screenH    = dims.height;
+  const topPad     = Platform.OS === "web" ? 67 : insets.top;
 
   const videoPanelW = isLandscape ? screenW * 0.58 : screenW;
-  const videoPanelH = isLandscape ? screenH : Math.min(300, screenH * 0.38);
+  const videoPanelH = isLandscape ? screenH - 60 : Math.min(300, screenH * 0.38);
 
+  const pose       = POSES[analysis?.sport ?? ""] ?? POSES.weightlifting;
+  const riskJoints = analysis ? getRiskJoints(analysis.injuryRisks) : {};
+
+  // ── Score helpers ─────────────────────────────────────────────────────
   const scoreKeys = ["technique", "power", "balance", "consistency"] as const;
-  function getScoreColor(s: number) {
-    if (s >= 80) return "#22c55e";
-    if (s >= 65) return "#6c63ff";
+  function scoreColor(v: number) {
+    if (v >= 80) return "#22c55e";
+    if (v >= 65) return "#6c63ff";
     return "#f59e0b";
   }
 
@@ -283,113 +365,49 @@ export default function SkeletonScreen() {
     );
   }
 
-  const joints = animatedJoints();
-
-  const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#050508" },
-    header: {
-      flexDirection: "row", alignItems: "center",
-      paddingTop: topPad + 8, paddingHorizontal: 20, paddingBottom: 12,
-      borderBottomWidth: 1, borderBottomColor: "#1e1e2e", gap: 12, zIndex: 10,
-    },
-    backBtn: {
-      width: 36, height: 36, borderRadius: 10,
-      backgroundColor: "#111118", borderWidth: 1, borderColor: "#1e1e2e",
-      alignItems: "center", justifyContent: "center",
-    },
-    headerTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", flex: 1 },
-    rotateBtn: {
-      flexDirection: "row", alignItems: "center", gap: 6,
-      backgroundColor: "#6c63ff", borderRadius: 20,
-      paddingHorizontal: 12, paddingVertical: 6,
-    },
-    rotateBtnText: { fontSize: 12, color: "#fff", fontFamily: "Inter_600SemiBold" },
-    body: { flex: 1, flexDirection: isLandscape ? "row" : "column" },
-    videoPanel: {
-      width: videoPanelW, height: videoPanelH,
-      backgroundColor: "#07070c", position: "relative", overflow: "hidden",
-    },
-    video: { position: "absolute", top: 0, left: 0, width: videoPanelW, height: videoPanelH },
-    noVideoScrim: {
-      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: "#07070c", alignItems: "center", justifyContent: "center",
-    },
-    noVideoText: { color: "#3a3a5c", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8 },
-    scrim: {
-      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: "rgba(5,5,10,0.45)",
-    },
-    svgOverlay: { position: "absolute", top: 0, left: 0 },
-    trackingBadge: {
-      position: "absolute", top: 10, left: 10,
-      flexDirection: "row", alignItems: "center", gap: 5,
-      backgroundColor: "rgba(108,99,255,0.85)", borderRadius: 20,
-      paddingHorizontal: 10, paddingVertical: 4,
-    },
-    trackingDot: {
-      width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e",
-    },
-    trackingText: { fontSize: 10, color: "#fff", fontFamily: "Inter_600SemiBold" },
-    infoPanel: { flex: 1, padding: 20 },
-    poseLabel: {
-      fontSize: 11, color: "#6c63ff", fontFamily: "Inter_600SemiBold",
-      textTransform: "uppercase", letterSpacing: 1, marginBottom: 16,
-    },
-    scoreRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-    scoreLabel: { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", width: 90, textTransform: "capitalize" },
-    scoreBarBg: { flex: 1, height: 6, backgroundColor: "#1e1e2e", borderRadius: 3, marginHorizontal: 10 },
-    scoreBarFill: { height: 6, borderRadius: 3 },
-    scoreNum: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", width: 28, textAlign: "right" },
-    divider: { height: 1, backgroundColor: "#1e1e2e", marginVertical: 14 },
-    riskTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", marginBottom: 10 },
-    riskItem: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-    riskDot: { width: 8, height: 8, borderRadius: 4 },
-    riskText: { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", flex: 1 },
-    riskPct: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-    legendRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
-    legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-    legendDot: { width: 8, height: 8, borderRadius: 4 },
-    legendText: { fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular" },
-  });
+  const progress = durationMs > 0 ? positionMs / durationMs : 0;
 
   return (
-    <View style={s.container}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+    <View style={ss.container}>
+      {/* ── Header ── */}
+      <View style={[ss.header, { paddingTop: topPad + 8 }]}>
+        <TouchableOpacity style={ss.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Feather name="chevron-left" size={18} color="#8888aa" />
         </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>
-          {pose.label}
-        </Text>
-        <TouchableOpacity style={s.rotateBtn} onPress={toggleOrientation} activeOpacity={0.8}>
+        <Text style={ss.headerTitle} numberOfLines={1}>{pose.label}</Text>
+        <TouchableOpacity style={ss.rotateBtn} onPress={toggleOrientation} activeOpacity={0.8}>
           <Feather name={isLandscape ? "smartphone" : "maximize"} size={13} color="#fff" />
-          <Text style={s.rotateBtnText}>{isLandscape ? "Portrait" : "Landscape"}</Text>
+          <Text style={ss.rotateBtnText}>{isLandscape ? "Portrait" : "Landscape"}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={s.body}>
-        {/* ── Video + animated skeleton overlay ── */}
-        <View style={s.videoPanel}>
+      <View style={[ss.body, { flexDirection: isLandscape ? "row" : "column" }]}>
+
+        {/* ── Video + skeleton panel ── */}
+        <View style={[ss.videoPanel, { width: videoPanelW, height: isLandscape ? undefined : videoPanelH, flex: isLandscape ? 0 : undefined }]}>
+
           {videoUri ? (
             <Video
+              ref={videoRef}
               source={{ uri: videoUri }}
-              style={s.video}
+              style={[ss.video, { width: videoPanelW, height: videoPanelH }]}
               resizeMode={ResizeMode.COVER}
               isLooping
               shouldPlay
+              onPlaybackStatusUpdate={onPlaybackUpdate}
             />
           ) : (
-            <View style={s.noVideoScrim}>
+            <View style={[ss.noVideo, { width: videoPanelW, height: videoPanelH }]}>
               <Feather name="video" size={36} color="#3a3a5c" />
-              <Text style={s.noVideoText}>Upload a video to see it here</Text>
+              <Text style={ss.noVideoText}>Upload a video to see it here</Text>
             </View>
           )}
 
-          {videoUri && <View style={s.scrim} />}
+          {videoUri && <View style={ss.scrim} />}
 
-          {/* Animated SVG skeleton */}
+          {/* ── Animated skeleton SVG overlay ── */}
           <Svg
-            style={s.svgOverlay}
+            style={ss.svgOverlay}
             width={videoPanelW}
             height={videoPanelH}
             viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -404,96 +422,109 @@ export default function SkeletonScreen() {
 
             {/* Animated bones */}
             {pose.bones.map(([a, b], i) => {
-              const pa = joints[a];
-              const pb = joints[b];
+              const pa = pose.joints[a];
+              const pb = pose.joints[b];
               if (!pa || !pb) return null;
-              const maxRisk = Math.max(riskJoints[a] ?? 0, riskJoints[b] ?? 0);
-              const bc = maxRisk >= 50 ? "#ef444499" : maxRisk >= 25 ? "#f59e0b99" : "#6c63ffaa";
               return (
-                <Line key={i}
-                  x1={pa[0]} y1={pa[1]} x2={pb[0]} y2={pb[1]}
-                  stroke={bc} strokeWidth={3.5} strokeLinecap="round"
+                <BoneSegment key={i}
+                  ax={pa[0]} ay={pa[1]} bx={pb[0]} by={pb[1]}
+                  nameA={a} nameB={b} phase={phase}
+                  riskA={riskJoints[a] ?? 0}
+                  riskB={riskJoints[b] ?? 0}
                 />
               );
             })}
 
             {/* Animated joints */}
-            {Object.entries(joints).map(([name, [x, y]]) => {
-              const risk = riskJoints[name];
-              const color = jointColor(risk);
-              const glow = jointGlow(risk);
-              const isHead = name === "head";
-              const r = isHead ? 14 : 6;
-              return (
-                <G key={name}>
-                  <Circle cx={x} cy={y} r={r + 7} fill={glow} />
-                  <Circle cx={x} cy={y} r={r} fill="#05050a" stroke={color} strokeWidth={2.5} />
-                  {risk !== undefined && risk >= 50 && (
-                    <Circle cx={x} cy={y} r={r + 13} fill="none"
-                      stroke="#ef4444" strokeWidth={1} strokeDasharray="4 4" />
-                  )}
-                  {risk !== undefined && risk >= 25 && !isHead && (
-                    <SvgText x={x + 11} y={y - 8} fontSize={9} fill={color} fontWeight="600">
-                      {risk}%
-                    </SvgText>
-                  )}
-                </G>
-              );
-            })}
+            {Object.entries(pose.joints).map(([name, [bx, by]]) => (
+              <JointDot
+                key={name}
+                bx={bx} by={by} name={name}
+                phase={phase}
+                risk={riskJoints[name]}
+              />
+            ))}
           </Svg>
 
-          {/* Live tracking badge */}
-          <View style={s.trackingBadge}>
-            <View style={s.trackingDot} />
-            <Text style={s.trackingText}>LIVE TRACKING</Text>
+          {/* LIVE TRACKING badge */}
+          <View style={ss.liveBadge}>
+            <View style={ss.liveDot} />
+            <Text style={ss.liveText}>LIVE TRACKING</Text>
           </View>
+
+          {/* ── Video controls ── */}
+          {videoUri && (
+            <View style={ss.controls}>
+              <TouchableOpacity onPress={togglePlay} style={ss.playBtn} activeOpacity={0.7}>
+                <Feather name={isPlaying ? "pause" : "play"} size={16} color="#fff" />
+              </TouchableOpacity>
+
+              <Text style={ss.timeText}>{fmtTime(positionMs)}</Text>
+
+              {/* Scrub bar */}
+              <View
+                style={ss.scrubBar}
+                onLayout={(e) => setScrubberWidth(e.nativeEvent.layout.width)}
+                onStartShouldSetResponder={() => true}
+                onMoveShouldSetResponder={() => true}
+                onResponderGrant={(e) => handleScrubberTouch(e, false)}
+                onResponderMove={(e) => handleScrubberTouch(e, false)}
+                onResponderRelease={(e) => handleScrubberTouch(e, true)}
+              >
+                <View style={[ss.scrubFill, { width: `${progress * 100}%` }]} />
+                <View style={[ss.scrubThumb, { left: `${progress * 100}%` as any }]} />
+              </View>
+
+              <Text style={ss.timeText}>{fmtTime(durationMs)}</Text>
+            </View>
+          )}
         </View>
 
         {/* ── Score / risk panel ── */}
-        <ScrollView style={s.infoPanel} showsVerticalScrollIndicator={false}>
-          <Text style={s.poseLabel}>{pose.label}</Text>
+        <ScrollView style={ss.infoPanel} showsVerticalScrollIndicator={false}>
+          <Text style={ss.poseLabel}>{pose.label}</Text>
 
           {scoreKeys.map((key) => {
             const val = analysis.scores[key];
-            const c = getScoreColor(val);
+            const c   = scoreColor(val);
             return (
-              <View key={key} style={s.scoreRow}>
-                <Text style={s.scoreLabel}>{key}</Text>
-                <View style={s.scoreBarBg}>
-                  <View style={[s.scoreBarFill, { width: `${val}%` as any, backgroundColor: c }]} />
+              <View key={key} style={ss.scoreRow}>
+                <Text style={ss.scoreLabel}>{key}</Text>
+                <View style={ss.scoreBarBg}>
+                  <View style={[ss.scoreBarFill, { width: `${val}%` as any, backgroundColor: c }]} />
                 </View>
-                <Text style={[s.scoreNum, { color: c }]}>{val}</Text>
+                <Text style={[ss.scoreNum, { color: c }]}>{val}</Text>
               </View>
             );
           })}
 
           {analysis.injuryRisks.length > 0 && (
             <>
-              <View style={s.divider} />
-              <Text style={s.riskTitle}>Joint Risk</Text>
+              <View style={ss.divider} />
+              <Text style={ss.riskTitle}>Joint Risk</Text>
               {analysis.injuryRisks.map((r, i) => {
                 const c = r.risk >= 50 ? "#ef4444" : r.risk >= 25 ? "#f59e0b" : "#22c55e";
                 return (
-                  <View key={i} style={s.riskItem}>
-                    <View style={[s.riskDot, { backgroundColor: c }]} />
-                    <Text style={s.riskText}>{r.joint}</Text>
-                    <Text style={[s.riskPct, { color: c }]}>{r.risk}%</Text>
+                  <View key={i} style={ss.riskItem}>
+                    <View style={[ss.riskDot, { backgroundColor: c }]} />
+                    <Text style={ss.riskText}>{r.joint}</Text>
+                    <Text style={[ss.riskPct, { color: c }]}>{r.risk}%</Text>
                   </View>
                 );
               })}
             </>
           )}
 
-          <View style={s.divider} />
-          <View style={s.legendRow}>
+          <View style={ss.divider} />
+          <View style={ss.legendRow}>
             {[
               { color: "#22c55e", label: "Good" },
               { color: "#f59e0b", label: "Caution 25–49%" },
               { color: "#ef4444", label: "High risk 50%+" },
             ].map((l) => (
-              <View key={l.label} style={s.legendItem}>
-                <View style={[s.legendDot, { backgroundColor: l.color }]} />
-                <Text style={s.legendText}>{l.label}</Text>
+              <View key={l.label} style={ss.legendItem}>
+                <View style={[ss.legendDot, { backgroundColor: l.color }]} />
+                <Text style={ss.legendText}>{l.label}</Text>
               </View>
             ))}
           </View>
@@ -503,3 +534,48 @@ export default function SkeletonScreen() {
     </View>
   );
 }
+
+// ── Static styles (no colors dependency needed here) ──────────────────────
+const ss = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: "#050508" },
+  header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#1e1e2e", gap: 12 },
+  backBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: "#111118", borderWidth: 1, borderColor: "#1e1e2e", alignItems: "center", justifyContent: "center" },
+  headerTitle:  { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", flex: 1 },
+  rotateBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  rotateBtnText:{ fontSize: 12, color: "#fff", fontFamily: "Inter_600SemiBold" },
+  body:         { flex: 1 },
+  videoPanel:   { backgroundColor: "#07070c", position: "relative", overflow: "hidden", flex: 1 },
+  video:        { position: "absolute", top: 0, left: 0 },
+  noVideo:      { backgroundColor: "#07070c", alignItems: "center", justifyContent: "center" },
+  noVideoText:  { color: "#3a3a5c", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8 },
+  scrim:        { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(5,5,10,0.42)" },
+  svgOverlay:   { position: "absolute", top: 0, left: 0 },
+  liveBadge:    { position: "absolute", top: 10, left: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(108,99,255,0.85)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  liveDot:      { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" },
+  liveText:     { fontSize: 10, color: "#fff", fontFamily: "Inter_600SemiBold" },
+  // Video controls
+  controls:     { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "rgba(5,5,12,0.78)" },
+  playBtn:      { width: 32, height: 32, borderRadius: 16, backgroundColor: "#6c63ff", alignItems: "center", justifyContent: "center" },
+  timeText:     { fontSize: 11, color: "#8888aa", fontFamily: "Inter_400Regular", width: 34, textAlign: "center" },
+  scrubBar:     { flex: 1, height: 28, justifyContent: "center", position: "relative" },
+  scrubFill:    { height: 4, backgroundColor: "#6c63ff", borderRadius: 2 },
+  scrubThumb:   { position: "absolute", width: 14, height: 14, borderRadius: 7, backgroundColor: "#fff", top: 7, marginLeft: -7 },
+  // Score panel
+  infoPanel:    { flex: 1, padding: 20 },
+  poseLabel:    { fontSize: 11, color: "#6c63ff", fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 },
+  scoreRow:     { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  scoreLabel:   { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", width: 90, textTransform: "capitalize" },
+  scoreBarBg:   { flex: 1, height: 6, backgroundColor: "#1e1e2e", borderRadius: 3, marginHorizontal: 10 },
+  scoreBarFill: { height: 6, borderRadius: 3 },
+  scoreNum:     { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", width: 28, textAlign: "right" },
+  divider:      { height: 1, backgroundColor: "#1e1e2e", marginVertical: 14 },
+  riskTitle:    { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", marginBottom: 10 },
+  riskItem:     { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  riskDot:      { width: 8, height: 8, borderRadius: 4 },
+  riskText:     { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", flex: 1 },
+  riskPct:      { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  legendRow:    { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  legendItem:   { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot:    { width: 8, height: 8, borderRadius: 4 },
+  legendText:   { fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular" },
+});

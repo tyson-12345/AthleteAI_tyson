@@ -56,6 +56,6 @@
   },
   "dependencies": {
     "expo-av": "^16.0.8",
-    "expo-screen-orientation": "^56.0.5"
+    "expo-screen-orientation": "^9.0.9"
   }
 }
