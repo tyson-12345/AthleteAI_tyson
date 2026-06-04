@@ -1,0 +1,1 @@
+- [AthleteAI migration patterns](athleteai-migration.md) — Next.js→Vite: use wouter Link/useLocation, remove "use client", theme CSS in index.css not globals.css
