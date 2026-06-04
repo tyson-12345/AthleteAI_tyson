@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 
 import { useColors } from "@/hooks/useColors";
-import { MOCK_ATHLETE } from "@/lib/athleteData";
+import { useAnalyses } from "@/lib/analysesStore";
 import type { VideoAnalysis } from "@/lib/types";
 
 const SPORT_ICONS: Record<string, "activity" | "target" | "zap" | "wind"> = {
@@ -53,7 +53,7 @@ export default function AnalyzeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [analyses, setAnalyses] = useState<VideoAnalysis[]>(MOCK_ATHLETE.analyses);
+  const { analyses, addAnalysis } = useAnalyses();
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [analysisDone, setAnalysisDone] = useState(false);
@@ -61,12 +61,9 @@ export default function AnalyzeScreen() {
   const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 60;
 
   async function handleUpload() {
-    // Ask for permission
     if (Platform.OS !== "web") {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        return;
-      }
+      if (status !== "granted") return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -77,7 +74,8 @@ export default function AnalyzeScreen() {
 
     if (result.canceled) return;
 
-    // Start simulated analysis
+    const pickedUri = result.assets[0]?.uri ?? "";
+
     setAnalyzing(true);
     setAnalysisStep(0);
     setAnalysisDone(false);
@@ -89,16 +87,13 @@ export default function AnalyzeScreen() {
 
     setAnalysisDone(true);
 
-    // Add a new mock analysis result
-    await new Promise((r) => setTimeout(r, 800));
-
     const newAnalysis: VideoAnalysis = {
       id: `an-new-${Date.now()}`,
       title: "New Upload — Analysis",
       sport: "weightlifting",
       uploadedAt: new Date().toISOString(),
       duration: Math.floor(Math.random() * 15) + 5,
-      thumbnailUrl: "",
+      thumbnailUrl: pickedUri,
       scores: {
         overall: 75,
         technique: 70,
@@ -122,21 +117,29 @@ export default function AnalyzeScreen() {
           category: "technique",
           severity: "warning",
           title: "Brace Earlier",
-          description: "You're initiating the pull before a full brace is achieved. This reduces spinal stability.",
-          drill: "Practice bracing with a belt before each set. 3 deep breaths, big brace, then pull.",
+          description:
+            "You're initiating the pull before a full brace is achieved. This reduces spinal stability.",
+          drill:
+            "Practice bracing with a belt before each set. 3 deep breaths, big brace, then pull.",
         },
       ],
       injuryRisks: [
-        { joint: "Lumbar Spine", risk: 48, description: "Mild flexion under load", prevention: "Reduce load 5%, focus on brace" },
+        {
+          joint: "Lumbar Spine",
+          risk: 48,
+          description: "Mild flexion under load",
+          prevention: "Reduce load 5%, focus on brace",
+        },
       ],
       frames: [],
     };
 
-    setAnalyses((prev) => [newAnalysis, ...prev]);
+    addAnalysis(newAnalysis, pickedUri);
+
+    await new Promise((r) => setTimeout(r, 600));
     setAnalyzing(false);
     setAnalysisDone(false);
 
-    // Navigate to the new analysis
     router.push(`/analysis/${newAnalysis.id}`);
   }
 
@@ -147,11 +150,7 @@ export default function AnalyzeScreen() {
       paddingHorizontal: 20,
       paddingBottom: 20,
     },
-    title: {
-      fontSize: 28,
-      fontFamily: "Inter_700Bold",
-      color: colors.foreground,
-    },
+    title: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.foreground },
     subtitle: {
       fontSize: 14,
       color: colors.mutedForeground,
@@ -170,11 +169,7 @@ export default function AnalyzeScreen() {
       marginBottom: 20,
       justifyContent: "center",
     },
-    uploadBtnText: {
-      color: "#fff",
-      fontSize: 15,
-      fontFamily: "Inter_600SemiBold",
-    },
+    uploadBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
     card: {
       backgroundColor: colors.card,
       borderRadius: colors.radius,
@@ -184,12 +179,7 @@ export default function AnalyzeScreen() {
       borderColor: colors.border,
       overflow: "hidden",
     },
-    cardBody: {
-      padding: 16,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 14,
-    },
+    cardBody: { padding: 16, flexDirection: "row", alignItems: "center", gap: 14 },
     iconBg: {
       width: 48,
       height: 48,
@@ -198,11 +188,7 @@ export default function AnalyzeScreen() {
       alignItems: "center",
       justifyContent: "center",
     },
-    cardTitle: {
-      fontSize: 15,
-      fontFamily: "Inter_600SemiBold",
-      color: colors.foreground,
-    },
+    cardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground },
     cardMeta: {
       fontSize: 12,
       color: colors.mutedForeground,
@@ -219,16 +205,8 @@ export default function AnalyzeScreen() {
       justifyContent: "center",
       borderWidth: 2,
     },
-    scoreText: {
-      fontSize: 16,
-      fontFamily: "Inter_700Bold",
-    },
-    bottomScores: {
-      flexDirection: "row",
-      paddingHorizontal: 16,
-      paddingBottom: 14,
-      gap: 8,
-    },
+    scoreText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+    bottomScores: { flexDirection: "row", paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
     scorePill: {
       flexDirection: "row",
       alignItems: "center",
@@ -243,11 +221,7 @@ export default function AnalyzeScreen() {
       color: colors.mutedForeground,
       fontFamily: "Inter_400Regular",
     },
-    scorePillValue: {
-      fontSize: 11,
-      fontFamily: "Inter_600SemiBold",
-      color: colors.foreground,
-    },
+    scorePillValue: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.foreground },
     comparedBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -257,12 +231,7 @@ export default function AnalyzeScreen() {
       paddingHorizontal: 8,
       paddingVertical: 3,
     },
-    comparedText: {
-      fontSize: 10,
-      color: colors.primary,
-      fontFamily: "Inter_500Medium",
-    },
-    // Modal styles
+    comparedText: { fontSize: 10, color: colors.primary, fontFamily: "Inter_500Medium" },
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(5,5,8,0.94)",
@@ -304,11 +273,7 @@ export default function AnalyzeScreen() {
       marginBottom: 24,
     },
     stepsContainer: { width: "100%", gap: 8 },
-    stepRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
+    stepRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     stepDot: {
       width: 20,
       height: 20,
@@ -316,25 +281,7 @@ export default function AnalyzeScreen() {
       alignItems: "center",
       justifyContent: "center",
     },
-    stepText: {
-      fontSize: 13,
-      fontFamily: "Inter_400Regular",
-    },
-    doneCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      backgroundColor: colors.success + "18",
-      borderRadius: 12,
-      padding: 14,
-      marginTop: 8,
-      width: "100%",
-    },
-    doneText: {
-      color: colors.success,
-      fontSize: 14,
-      fontFamily: "Inter_600SemiBold",
-    },
+    stepText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   });
 
   const renderItem = ({ item }: { item: VideoAnalysis }) => {
@@ -351,7 +298,9 @@ export default function AnalyzeScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.cardTitle}>{item.title}</Text>
-            <Text style={s.cardMeta}>{item.sport} · {item.duration}s · {formatDate(item.uploadedAt)}</Text>
+            <Text style={s.cardMeta}>
+              {item.sport} · {item.duration}s · {formatDate(item.uploadedAt)}
+            </Text>
           </View>
           <View style={[s.scoreCircle, { borderColor: scoreColor }]}>
             <Text style={[s.scoreText, { color: scoreColor }]}>{item.scores.overall}</Text>
@@ -392,20 +341,19 @@ export default function AnalyzeScreen() {
         data={analyses}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        scrollEnabled={!!analyses.length}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: bottomPad }}
       />
 
-      {/* Analysis processing modal */}
       <Modal visible={analyzing} transparent animationType="fade">
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
             <View style={s.modalIconBg}>
-              {analysisDone
-                ? <Feather name="check" size={28} color={colors.success} />
-                : <ActivityIndicator size="large" color={colors.primary} />
-              }
+              {analysisDone ? (
+                <Feather name="check" size={28} color={colors.success} />
+              ) : (
+                <ActivityIndicator size="large" color={colors.primary} />
+              )}
             </View>
 
             <Text style={s.modalTitle}>
@@ -421,34 +369,37 @@ export default function AnalyzeScreen() {
                 const active = i === analysisStep && !analysisDone;
                 return (
                   <View key={i} style={s.stepRow}>
-                    <View style={[
-                      s.stepDot,
-                      {
-                        backgroundColor: done
-                          ? colors.success + "22"
-                          : active
-                            ? colors.primary + "22"
-                            : colors.muted,
-                      },
-                    ]}>
-                      {done
-                        ? <Feather name="check" size={11} color={colors.success} />
-                        : active
-                          ? <ActivityIndicator size="small" color={colors.primary} />
-                          : null
-                      }
+                    <View
+                      style={[
+                        s.stepDot,
+                        {
+                          backgroundColor: done
+                            ? colors.success + "22"
+                            : active
+                              ? colors.primary + "22"
+                              : colors.muted,
+                        },
+                      ]}
+                    >
+                      {done ? (
+                        <Feather name="check" size={11} color={colors.success} />
+                      ) : active ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : null}
                     </View>
-                    <Text style={[
-                      s.stepText,
-                      {
-                        color: done
-                          ? colors.success
-                          : active
-                            ? colors.foreground
-                            : colors.mutedForeground,
-                        fontFamily: active ? "Inter_500Medium" : "Inter_400Regular",
-                      },
-                    ]}>
+                    <Text
+                      style={[
+                        s.stepText,
+                        {
+                          color: done
+                            ? colors.success
+                            : active
+                              ? colors.foreground
+                              : colors.mutedForeground,
+                          fontFamily: active ? "Inter_500Medium" : "Inter_400Regular",
+                        },
+                      ]}
+                    >
                       {step.replace("...", "")}
                     </Text>
                   </View>

@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
 import { useColors } from "@/hooks/useColors";
-import { MOCK_ATHLETE } from "@/lib/athleteData";
+import { useAnalyses } from "@/lib/analysesStore";
 import type { CoachingTip } from "@/lib/types";
 
 const SCORE_KEYS = ["technique", "power", "balance", "consistency", "mobility", "speed"] as const;
@@ -36,7 +36,8 @@ export default function AnalysisDetailScreen() {
   const [expandedTip, setExpandedTip] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"scores" | "tips" | "risks">("scores");
 
-  const analysis = MOCK_ATHLETE.analyses.find((a) => a.id === id);
+  const { analyses } = useAnalyses();
+  const analysis = analyses.find((a) => a.id === id);
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
   if (!analysis) {
