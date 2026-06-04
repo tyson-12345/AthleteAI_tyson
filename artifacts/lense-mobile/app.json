@@ -14,9 +14,12 @@
       "backgroundColor": "#0a0a0f"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.athleteai.lensemobile"
     },
-    "android": {},
+    "android": {
+      "package": "com.athleteai.lensemobile"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
