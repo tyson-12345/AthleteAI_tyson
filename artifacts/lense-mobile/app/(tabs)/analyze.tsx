@@ -8,6 +8,7 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -61,20 +62,46 @@ export default function AnalyzeScreen() {
   const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 60;
 
   async function handleUpload() {
-    if (Platform.OS !== "web") {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") return;
-    }
+    let result: ImagePicker.ImagePickerResult;
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission needed",
+            "Allow photo & video access in Settings so you can pick a clip to analyze.",
+          );
+          return;
+        }
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "videos",
-      allowsEditing: false,
-      quality: 1,
-    });
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "videos",
+        allowsEditing: false,
+        quality: 1,
+      });
+    } catch (err) {
+      // iOS PHPhotosErrorDomain (e.g. error 3164) happens when the selected
+      // clip can't be exported — usually an iCloud-only video that hasn't been
+      // downloaded to the device, or a format Expo Go can't transcode.
+      const msg = err instanceof Error ? err.message : String(err);
+      const isiCloud = /3164|PHPhotos|could not be completed/i.test(msg);
+      Alert.alert(
+        "Couldn't load that video",
+        isiCloud
+          ? "This clip is stored in iCloud and isn't downloaded to your phone yet. Open the Photos app, let it fully download (tap the clip until the spinner finishes), then try again — or pick a video that's saved on this device."
+          : "Something went wrong loading that video. Please try a different clip.",
+      );
+      return;
+    }
 
     if (result.canceled) return;
 
     const pickedUri = result.assets[0]?.uri ?? "";
+    if (!pickedUri) {
+      Alert.alert("Couldn't load that video", "Please try selecting the clip again.");
+      return;
+    }
 
     setAnalyzing(true);
     setAnalysisStep(0);
