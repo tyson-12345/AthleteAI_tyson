@@ -30,6 +30,46 @@ type RiskMap = Record<keyof JointAngles, number>;
 
 const RISK_COLORS = ["#22c55e", "#f59e0b", "#ef4444"];
 
+// Is angle `a` a more extreme (worse) pattern than `b` for this joint?
+// Knees fail at both ends (deep bend / hyperextension) so we measure distance
+// from a neutral mid-angle; hips fail on deep flexion (lower is worse); elbows
+// fail on hyperextension (higher is worse).
+function moreExtreme(key: string, a: number, b: number): boolean {
+  if (key.includes("Knee")) return Math.abs(a - 130) > Math.abs(b - 130);
+  if (key.includes("Hip")) return a < b;
+  return a > b;
+}
+
+// Plain-language issue + coaching advice for a flagged joint, based on the
+// joint and the angle observed at its worst moment.
+function jointInsight(key: string, deg: number): { title: string; body: string } {
+  const side = key.startsWith("left") ? "Left" : "Right";
+  if (key.includes("Knee")) {
+    if (deg <= 95)
+      return {
+        title: `${side} knee — deep bend`,
+        body: "The knee flexes very deep under load, stressing the patellar tendon and ACL. Control your descent, keep the knee tracking over your toes (don't let it cave inward), and build quad and glute strength.",
+      };
+    return {
+      title: `${side} knee — hyperextension`,
+      body: "The knee locks out near full extension. Keep a soft micro-bend at lockout so the joint and ligaments absorb load instead of the bone.",
+    };
+  }
+  if (key.includes("Hip")) {
+    return {
+      title: `${side} hip — deep flexion`,
+      body: "A very deep hip hinge can round the lower back. Brace your core, keep a neutral spine, and hinge from the hips rather than collapsing the torso.",
+    };
+  }
+  if (key.includes("Elbow")) {
+    return {
+      title: `${side} elbow — hyperextension`,
+      body: "The elbow locks out fully. Keep a slight bend through the movement to protect the joint and surrounding tendons.",
+    };
+  }
+  return { title: side, body: "" };
+}
+
 // ─── HTML builder ─────────────────────────────────────────────────────────────
 // The entire pose-tracking UI lives inside the WebView.
 // MediaPipe runs in the phone's browser engine (WebAssembly + WebGL),
@@ -363,6 +403,8 @@ ${videoUri ? `
     scrub.max=video.duration;
     timeR.textContent=fmt(video.duration);
     sizeWrap();
+    try{window.ReactNativeWebView.postMessage(JSON.stringify({
+      type:"meta",vw:video.videoWidth,vh:video.videoHeight,dur:video.duration}));}catch(e){}
   });
   video.addEventListener("loadeddata",()=>setTimeout(detect,80));
   video.addEventListener("seeked",detect);
@@ -429,6 +471,8 @@ export default function SkeletonScreen() {
   const [angles,     setAngles]     = useState<JointAngles | null>(null);
   const [risk,       setRisk]       = useState<RiskMap | null>(null);
   const [maxLvl,     setMaxLvl]     = useState(0);
+  const [peak,       setPeak]       = useState<Record<string, { lvl: number; deg: number }>>({});
+  const [videoAspect, setVideoAspect] = useState(16 / 9);
   const [modelReady, setModelReady] = useState(false);
   const [preparing,  setPreparing]  = useState(true);
 
@@ -445,9 +489,35 @@ export default function SkeletonScreen() {
   function handleMessage(event: { nativeEvent: { data: string } }) {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type === "meta" && msg.vw > 0 && msg.vh > 0) {
+        setVideoAspect(msg.vw / msg.vh);
+        return;
+      }
       if (msg.type === "angles") {
-        setAngles(msg.data as JointAngles);
-        if (msg.risk) setRisk(msg.risk as RiskMap);
+        const data = msg.data as JointAngles;
+        setAngles(data);
+        if (msg.risk) {
+          const r = msg.risk as RiskMap;
+          setRisk(r);
+          // Track the worst risk level seen for each joint over the session
+          setPeak((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            (Object.keys(r) as (keyof RiskMap)[]).forEach((k) => {
+              const lvl = r[k];
+              const deg = data[k];
+              if (lvl < 1) return;
+              const cur = next[k];
+              // Keep the worst level; at the same level keep the most extreme
+              // angle so the advice reflects the true peak pattern.
+              if (!cur || lvl > cur.lvl || (lvl === cur.lvl && moreExtreme(k, deg, cur.deg))) {
+                next[k] = { lvl, deg };
+                changed = true;
+              }
+            });
+            return changed ? next : prev;
+          });
+        }
         setMaxLvl(typeof msg.maxLvl === "number" ? msg.maxLvl : 0);
         if (!modelReady) setModelReady(true);
       }
@@ -464,6 +534,13 @@ export default function SkeletonScreen() {
     let cancelled = false;
     setPreparing(true);
     setHtmlFileUri(null);
+    // Reset per-video analysis state
+    setAngles(null);
+    setRisk(null);
+    setMaxLvl(0);
+    setPeak({});
+    setVideoAspect(16 / 9);
+    setModelReady(false);
 
     (async () => {
       try {
@@ -511,10 +588,26 @@ export default function SkeletonScreen() {
     { label: "R Elbow", deg: angles.rightElbow, key: "rightElbow" },
   ] as const) : [];
 
-  // Shared video/WebView block — fills the screen in landscape, fixed height
-  // in portrait (so the angle cards below it stay scrollable into view).
+  // ── Injury-risk summary (worst level seen per joint over the session) ───────
+  const insights = Object.entries(peak)
+    .filter(([, v]) => v.lvl >= 1)
+    .sort((a, b) => b[1].lvl - a[1].lvl)
+    .map(([key, v]) => ({ key, lvl: v.lvl, ...jointInsight(key, v.deg) }));
+
+  // ── Adaptive video height ──────────────────────────────────────────────────
+  // Match the WebView height to the video's aspect ratio so portrait, square,
+  // and wide clips all display without awkward letterboxing. The internal
+  // controls bar (~CTRL_H) sits below the video inside the WebView.
+  const CTRL_H = 112;
+  // Fit the video to its native aspect; cap tall clips at 62% of the screen and
+  // keep a small floor so ultra-wide clips stay usable without forced letterboxing.
+  const videoAreaH = Math.max(120, Math.min(screenW / videoAspect, screenH * 0.62));
+  const portraitWebH = Math.round(videoAreaH + CTRL_H);
+
+  // Shared video/WebView block — fills the screen in landscape, aspect-fitted
+  // height in portrait (so the angle cards below it stay scrollable into view).
   const mediaBlock = preparing ? (
-    <View style={[ss.webviewSlot, { height: isLandscape ? undefined : Math.min(screenH * 0.52, 340), flex: isLandscape ? 1 : undefined }]}>
+    <View style={[ss.webviewSlot, { height: isLandscape ? undefined : portraitWebH, flex: isLandscape ? 1 : undefined }]}>
       <ActivityIndicator color="#6c63ff" size="large" />
       <Text style={ss.preparingText}>Preparing video…</Text>
     </View>
@@ -522,7 +615,7 @@ export default function SkeletonScreen() {
     <WebView
       ref={webviewRef}
       source={{ uri: htmlFileUri }}
-      style={{ flex: isLandscape ? 1 : undefined, height: isLandscape ? undefined : Math.min(screenH * 0.52, 340) }}
+      style={{ flex: isLandscape ? 1 : undefined, height: isLandscape ? undefined : portraitWebH }}
       allowFileAccess
       allowFileAccessFromFileURLs
       allowUniversalAccessFromFileURLs
@@ -617,6 +710,41 @@ export default function SkeletonScreen() {
             </View>
           )}
 
+          {/* Injury-risk summary + coaching advice */}
+          {modelReady && videoUri && (
+            <View style={ss.summarySection}>
+              <Text style={ss.sectionLabel}>INJURY RISK SUMMARY</Text>
+              {insights.length === 0 ? (
+                <View style={ss.okCard}>
+                  <Feather name="check-circle" size={18} color="#22c55e" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={ss.okTitle}>No injury-risk patterns detected</Text>
+                    <Text style={ss.okBody}>Your joint angles stayed within safe ranges so far. Keep playing the clip to analyze the full movement.</Text>
+                  </View>
+                </View>
+              ) : (
+                insights.map(({ key, lvl, title, body }) => {
+                  const c = RISK_COLORS[lvl];
+                  return (
+                    <View key={key} style={[ss.insightCard, { borderLeftColor: c }]}>
+                      <View style={ss.insightHead}>
+                        <Feather name={lvl === 2 ? "alert-triangle" : "alert-circle"} size={14} color={c} />
+                        <Text style={[ss.insightTitle, { color: c }]}>{title}</Text>
+                        <Text style={[ss.insightTag, { color: c, borderColor: c + "55" }]}>
+                          {lvl === 2 ? "RISK" : "CAUTION"}
+                        </Text>
+                      </View>
+                      <Text style={ss.insightBody}>{body}</Text>
+                    </View>
+                  );
+                })
+              )}
+              <Text style={ss.disclaimer}>
+                Automated movement guidance — not a medical diagnosis. Consult a coach or physio for persistent pain.
+              </Text>
+            </View>
+          )}
+
           {/* No video prompt */}
           {!videoUri && (
             <View style={ss.noVideo}>
@@ -653,4 +781,14 @@ const ss = StyleSheet.create({
   noVideoSub:    { fontSize: 12, color: "#3a3a5c", fontFamily: "Inter_400Regular", textAlign: "center" },
   webviewSlot:   { backgroundColor: "#07070f", alignItems: "center", justifyContent: "center", gap: 10 },
   preparingText: { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular" },
+  summarySection:{ paddingHorizontal: 18, paddingTop: 22, gap: 10 },
+  okCard:        { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: "#0f1c12", borderWidth: 1, borderColor: "#22c55e33", borderRadius: 14, padding: 14 },
+  okTitle:       { fontSize: 13, color: "#d8f5e0", fontFamily: "Inter_600SemiBold" },
+  okBody:        { fontSize: 12, color: "#7a9a82", fontFamily: "Inter_400Regular", marginTop: 3, lineHeight: 17 },
+  insightCard:   { backgroundColor: "#0f0f1c", borderRadius: 12, borderLeftWidth: 3, padding: 14, gap: 7 },
+  insightHead:   { flexDirection: "row", alignItems: "center", gap: 7 },
+  insightTitle:  { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  insightTag:    { fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden" },
+  insightBody:   { fontSize: 12, color: "#a0a0bc", fontFamily: "Inter_400Regular", lineHeight: 18 },
+  disclaimer:    { fontSize: 10, color: "#55556e", fontFamily: "Inter_400Regular", lineHeight: 14, marginTop: 4, fontStyle: "italic" },
 });
