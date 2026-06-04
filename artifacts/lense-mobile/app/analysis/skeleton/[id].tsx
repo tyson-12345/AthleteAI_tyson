@@ -1,288 +1,357 @@
-import React, { useRef, useState, useEffect, useMemo } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Platform,
   useWindowDimensions,
-  ScrollView,
-  GestureResponderEvent,
+  StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { WebView } from "react-native-webview";
 import * as ScreenOrientation from "expo-screen-orientation";
-import Animated, {
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  Easing,
-  useAnimatedProps,
-} from "react-native-reanimated";
-import { Circle, Line } from "react-native-svg";
-import Svg, { G } from "react-native-svg";
 
 import { useAnalyses } from "@/lib/analysesStore";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type Pt = readonly [number, number];
-type Joints = Record<string, Pt>;
-
-// ─── Math ─────────────────────────────────────────────────────────────────────
-function calcAngle(a: Pt, v: Pt, b: Pt): number {
-  const ax = a[0] - v[0], ay = a[1] - v[1];
-  const bx = b[0] - v[0], by = b[1] - v[1];
-  const dot = ax * bx + ay * by;
-  const mag = Math.sqrt(ax * ax + ay * ay) * Math.sqrt(bx * bx + by * by);
-  if (mag === 0) return 0;
-  return Math.round((Math.acos(Math.min(1, Math.max(-1, dot / mag))) * 180) / Math.PI);
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface JointAngles {
+  leftKnee: number; rightKnee: number;
+  leftHip: number;  rightHip: number;
+  leftElbow: number; rightElbow: number;
 }
 
-function fmtTime(ms: number) {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
+// ─── HTML builder ─────────────────────────────────────────────────────────────
+// The entire pose-tracking UI lives inside the WebView.
+// MediaPipe runs in the phone's browser engine (WebAssembly + WebGL),
+// which means real, per-frame joint detection — no native build needed.
+function buildHtml(videoUri: string | undefined): string {
+  const MEDIAPIPE_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404";
 
-// ─── Sport base poses ─────────────────────────────────────────────────────────
-// One canonical pose per sport. Each joint is [x, y] in a 320×400 viewBox.
-// The skeleton sits roughly centered on where an athlete appears in a typical
-// training video (centered horizontally, upper-mid frame vertically).
-// A very subtle breathing animation (±2-3 px) is applied on top via Reanimated
-// so the overlay looks "live" without oscillating wildly.
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#07070f;font-family:-apple-system,sans-serif;color:#f0f0f8}
 
-const SPORT_POSES: Record<string, Joints> = {
-  basketball: {
-    // Triple-threat stance (crouched, ball low right side)
-    head:      [160, 54],
-    neck:      [160, 80],
-    spine:     [158, 115],
-    hip:       [152, 188],
-    hipL:      [170, 190],
-    shoulderR: [138, 108],
-    shoulderL: [182, 106],
-    elbowR:    [116, 152],
-    elbowL:    [200, 134],
-    wristR:    [132, 196],
-    wristL:    [210, 108],
-    kneeR:     [136, 264],
-    kneeL:     [176, 260],
-    ankleR:    [124, 336],
-    ankleL:    [182, 332],
-    toeR:      [110, 352],
-    toeL:      [196, 348],
-  },
-  running: {
-    // Mid-stride (drive phase)
-    head:      [162, 46],
-    neck:      [160, 72],
-    spine:     [158, 106],
-    hip:       [154, 175],
-    hipL:      [172, 177],
-    shoulderR: [138, 98],
-    shoulderL: [184, 96],
-    elbowR:    [112, 134],
-    elbowL:    [208, 124],
-    wristR:    [92,  168],
-    wristL:    [228, 92],
-    kneeR:     [166, 256],
-    kneeL:     [148, 234],
-    ankleR:    [184, 326],
-    ankleL:    [120, 298],
-    toeR:      [198, 346],
-    toeL:      [105, 315],
-  },
-  weightlifting: {
-    // Deadlift lockout (standing tall, bar at hips)
-    head:      [160, 48],
-    neck:      [160, 74],
-    spine:     [161, 108],
-    hip:       [156, 178],
-    hipL:      [172, 180],
-    shoulderR: [138, 102],
-    shoulderL: [184, 100],
-    elbowR:    [116, 146],
-    elbowL:    [150, 148],
-    wristR:    [104, 194],
-    wristL:    [142, 196],
-    kneeR:     [150, 258],
-    kneeL:     [174, 260],
-    ankleR:    [144, 332],
-    ankleL:    [180, 334],
-    toeR:      [130, 350],
-    toeL:      [194, 352],
-  },
-  golf: {
-    // Address position (bent at hips, arms hanging)
-    head:      [162, 52],
-    neck:      [160, 78],
-    spine:     [160, 112],
-    hip:       [156, 182],
-    hipL:      [174, 184],
-    shoulderR: [136, 104],
-    shoulderL: [184, 102],
-    elbowR:    [112, 150],
-    elbowL:    [202, 150],
-    wristR:    [140, 196],
-    wristL:    [198, 196],
-    kneeR:     [152, 258],
-    kneeL:     [178, 256],
-    ankleR:    [146, 332],
-    ankleL:    [184, 330],
-    toeR:      [132, 350],
-    toeL:      [198, 348],
-  },
-};
+/* ── Video area ── */
+#wrap{position:relative;width:100%;background:#000}
+video,canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain}
+canvas{pointer-events:none}
 
-function getPose(sport: string): Joints {
-  return SPORT_POSES[sport] ?? SPORT_POSES.weightlifting;
-}
+/* ── Badge ── */
+#badge{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;
+  background:rgba(4,4,12,.88);border:1px solid rgba(34,211,238,.30);
+  border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22d3ee}
+#dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399;flex-shrink:0}
 
-// ─── Bone definitions ─────────────────────────────────────────────────────────
-type BoneKind = "cyan" | "purple" | "dim";
-const BONES: [string, string, BoneKind][] = [
-  ["head",      "neck",      "dim"],
-  ["neck",      "spine",     "purple"],
-  ["spine",     "hip",       "purple"],
-  ["spine",     "hipL",      "purple"],
-  ["hip",       "hipL",      "purple"],
-  ["neck",      "shoulderR", "purple"],
-  ["neck",      "shoulderL", "purple"],
-  ["shoulderR", "elbowR",    "cyan"],
-  ["elbowR",    "wristR",    "cyan"],
-  ["shoulderL", "elbowL",    "cyan"],
-  ["elbowL",    "wristL",    "cyan"],
-  ["hip",       "kneeR",     "cyan"],
-  ["kneeR",     "ankleR",    "cyan"],
-  ["ankleR",    "toeR",      "cyan"],
-  ["hipL",      "kneeL",     "cyan"],
-  ["kneeL",     "ankleL",    "cyan"],
-  ["ankleL",    "toeL",      "cyan"],
-];
+/* ── No video placeholder ── */
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;color:#3a3a5c;font-size:13px}
 
-const BONE_COLOR: Record<BoneKind, string> = {
-  cyan:   "#06b6d4",
-  purple: "#a78bfa",
-  dim:    "#ffffff88",
-};
+/* ── Loading overlay ── */
+#loading{position:fixed;inset:0;z-index:99;background:rgba(4,4,12,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#loading.hide{display:none}
+.spin{width:38px;height:38px;border:3px solid #6c63ff33;border-top-color:#6c63ff;
+  border-radius:50%;animation:sp .75s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.load-text{font-size:14px;font-weight:600}
+.load-sub{font-size:11px;color:#8888aa}
 
-// ─── Risk helpers ─────────────────────────────────────────────────────────────
-function riskColor(r: number) {
-  if (r >= 50) return "#ef4444";
-  if (r >= 25) return "#f59e0b";
-  if (r > 0)   return "#22c55e";
-  return null;
-}
+/* ── Controls bar ── */
+#ctrl{position:fixed;bottom:0;left:0;right:0;background:rgba(4,4,12,.96);
+  padding:10px 14px 14px;display:flex;flex-direction:column;gap:9px}
+.row{display:flex;align-items:center;gap:8px}
 
-// ─── Animated joint ───────────────────────────────────────────────────────────
-// Each joint oscillates ±amp pixels around its base position.
-// The phase offset staggers joints so they don't all pulse together.
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+/* Scrub */
+#timeL,#timeR{font-size:11px;color:#8888aa;font-variant-numeric:tabular-nums;min-width:32px}
+#timeR{text-align:right}
+#scrub{flex:1;height:4px;accent-color:#6c63ff;cursor:pointer}
 
-function JointDot({
-  bx, by, amp, phaseOffset, breathe, stroke,
-}: {
-  bx: number; by: number; amp: number; phaseOffset: number;
-  breathe: Animated.SharedValue<number>; stroke: string;
-}) {
-  const props = useAnimatedProps(() => {
-    const t = breathe.value + phaseOffset;
-    return {
-      cx: bx + Math.sin(t) * amp * 0.6,
-      cy: by + Math.cos(t * 0.8) * amp,
+/* Buttons */
+.tbtn{background:#1c1c2e;border:none;border-radius:10px;color:#e0e0f0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+#playBtn{width:42px;height:42px;background:#6c63ff;border-radius:13px;
+  box-shadow:0 0 18px #6c63ff77}
+.step{width:34px;height:34px;font-size:16px}
+
+/* Speed pills */
+#speeds{display:flex;gap:2px;background:#1c1c2e;padding:4px;border-radius:10px}
+.spd{border:none;background:transparent;color:#8888aa;font-size:11px;font-weight:700;
+  padding:4px 9px;border-radius:7px;cursor:pointer;transition:all .15s}
+.spd.on{background:#6c63ff;color:#fff}
+
+/* Skeleton toggle */
+#skelBtn{padding:6px 11px;font-size:11px;font-weight:700;border-radius:9px;cursor:pointer;
+  border:1px solid transparent;transition:all .15s}
+#skelBtn.on{background:rgba(34,211,238,.12);color:#22d3ee;border-color:rgba(34,211,238,.28)}
+#skelBtn.off{background:#1c1c2e;color:#8888aa}
+</style>
+</head>
+<body>
+<div id="wrap">
+  ${videoUri
+    ? `<video id="v" playsinline webkit-playsinline muted loop preload="auto"></video>
+       <canvas id="c"></canvas>
+       <div id="badge"><div id="dot"></div><span id="btxt">Loading AI…</span></div>`
+    : `<div id="empty">
+         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3a3a5c" stroke-width="1.5" stroke-linecap="round">
+           <rect x="2" y="6" width="20" height="12" rx="2"/><path d="m9 10 5 2-5 2z"/>
+         </svg>
+         <p>Upload a video from the Analysis page</p>
+         <p style="font-size:11px;color:#2a2a3c">to see real-time pose tracking</p>
+       </div>`}
+</div>
+
+${videoUri ? `
+<div id="ctrl">
+  <div class="row">
+    <span id="timeL">0:00</span>
+    <input id="scrub" type="range" min="0" max="100" step="0.1" value="0">
+    <span id="timeR">0:00</span>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <div class="row" style="gap:6px">
+      <button class="tbtn step" id="bk">&#9664;</button>
+      <button class="tbtn" id="playBtn">&#9654;</button>
+      <button class="tbtn step" id="fw">&#9654;&#9654;</button>
+    </div>
+    <div class="row" style="gap:6px">
+      <div id="speeds">
+        <button class="spd" data-s="0.1">0.1×</button>
+        <button class="spd" data-s="0.25">0.25×</button>
+        <button class="spd" data-s="0.5">0.5×</button>
+        <button class="spd on" data-s="1">1×</button>
+      </div>
+      <button class="tbtn on" id="skelBtn">Skeleton</button>
+    </div>
+  </div>
+</div>
+` : ''}
+
+<div id="loading">
+  <div class="spin"></div>
+  <p class="load-text">Loading AI pose model…</p>
+  <p class="load-sub">First load ~5 s · downloads ~6 MB</p>
+</div>
+
+<script src="${MEDIAPIPE_BASE}/pose.js" crossorigin="anonymous"
+  onerror="document.getElementById('loading').innerHTML='<p style=color:#f43f5e>Could not load pose model.<br>Check your internet connection.</p>'">
+</script>
+<script>
+(function(){
+  const VIDEO_URI = ${videoUri ? JSON.stringify(videoUri) : "null"};
+
+  /* If no video, hide loading and stop */
+  if(!VIDEO_URI){
+    document.getElementById("loading").classList.add("hide");
+    return;
+  }
+
+  const video   = document.getElementById("v");
+  const canvas  = document.getElementById("c");
+  const ctx     = canvas.getContext("2d");
+  const loading = document.getElementById("loading");
+  const btxt    = document.getElementById("btxt");
+  const scrub   = document.getElementById("scrub");
+  const timeL   = document.getElementById("timeL");
+  const timeR   = document.getElementById("timeR");
+  const playBtn = document.getElementById("playBtn");
+  const skelBtn = document.getElementById("skelBtn");
+
+  let busy=false, playing=false, showSkel=true;
+
+  /* ── Helpers ── */
+  function fmt(t){const s=Math.floor(t);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+
+  /* ── Size video container to leave room for controls ── */
+  function sizeWrap(){
+    const ctrlH = document.getElementById("ctrl")?.offsetHeight || 110;
+    document.getElementById("wrap").style.height=(window.innerHeight-ctrlH)+"px";
+  }
+  window.addEventListener("resize",sizeWrap);
+
+  /* ── MediaPipe connections ── */
+  const CONN=[[11,12],[11,23],[12,24],[23,24],[11,13],[13,15],[15,17],[15,19],[17,19],[12,14],[14,16],[16,18],[16,20],[18,20],[23,25],[25,27],[27,29],[27,31],[29,31],[24,26],[26,28],[28,30],[28,32],[30,32]];
+  const LI=new Set([11,13,15,17,19,21,23,25,27,29,31]);
+  const RI=new Set([12,14,16,18,20,22,24,26,28,30,32]);
+  const KJ=[0,11,12,13,14,15,16,23,24,25,26,27,28];
+
+  function ang(a,b,c){
+    const ab={x:a.x-b.x,y:a.y-b.y},cb={x:c.x-b.x,y:c.y-b.y};
+    return Math.round(Math.atan2(Math.abs(ab.x*cb.y-ab.y*cb.x),ab.x*cb.x+ab.y*cb.y)*180/Math.PI);
+  }
+
+  function label(x,y,txt,col){
+    ctx.save();
+    ctx.font="bold 15px -apple-system,sans-serif";
+    const w=ctx.measureText(txt).width+16;
+    ctx.fillStyle="rgba(4,4,12,.9)";
+    ctx.beginPath();ctx.roundRect(x-w/2,y-15,w,28,7);ctx.fill();
+    ctx.fillStyle=col;ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(txt,x,y);
+    ctx.restore();
+  }
+
+  /* ── Draw results ── */
+  function onResults(res){
+    busy=false;
+    const W=video.videoWidth||640,H=video.videoHeight||360;
+    canvas.width=W;canvas.height=H;
+    ctx.clearRect(0,0,W,H);
+    const lm=res.poseLandmarks;
+    if(!lm||!showSkel)return;
+    const v=i=>(lm[i]?.visibility||0)>0.35;
+    const p=i=>({x:lm[i].x*W,y:lm[i].y*H});
+
+    /* Bones */
+    CONN.forEach(([a,b])=>{
+      if(!v(a)||!v(b))return;
+      const pA=p(a),pB=p(b);
+      const col=LI.has(a)&&LI.has(b)?"#22d3ee":RI.has(a)&&RI.has(b)?"#a78bfa":"rgba(255,255,255,.5)";
+      ctx.save();
+      ctx.strokeStyle=col;ctx.lineWidth=3.5;ctx.lineCap="round";
+      ctx.shadowBlur=10;ctx.shadowColor=col;ctx.globalAlpha=.9;
+      ctx.beginPath();ctx.moveTo(pA.x,pA.y);ctx.lineTo(pB.x,pB.y);ctx.stroke();
+      ctx.restore();
+    });
+
+    /* Joints */
+    let seen=0;
+    KJ.forEach(i=>{
+      if(!v(i))return;seen++;
+      const pt=p(i);
+      const col=LI.has(i)?"#22d3ee":RI.has(i)?"#a78bfa":"#fff";
+      ctx.save();
+      ctx.shadowBlur=14;ctx.shadowColor=col;
+      ctx.fillStyle=col+"cc";ctx.beginPath();ctx.arc(pt.x,pt.y,7,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#07070f";ctx.beginPath();ctx.arc(pt.x,pt.y,3.2,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    });
+    btxt.textContent=seen>0?seen+" joints tracked":"Pose active";
+
+    /* Angle labels */
+    if(v(23)&&v(25)&&v(27)) label(p(25).x+32,p(25).y,ang(p(23),p(25),p(27))+"°","#22d3ee");
+    if(v(24)&&v(26)&&v(28)) label(p(26).x-32,p(26).y,ang(p(24),p(26),p(28))+"°","#a78bfa");
+    if(v(11)&&v(23)&&v(25)) label(p(23).x+36,p(23).y-12,ang(p(11),p(23),p(25))+"°","#f59e0b");
+
+    /* Post angles to React Native */
+    if(v(23)&&v(25)&&v(27)&&v(24)&&v(26)&&v(28)){
+      try{
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:"angles",data:{
+          leftKnee: ang(p(23),p(25),p(27)),
+          rightKnee:ang(p(24),p(26),p(28)),
+          leftHip:  v(11)?ang(p(11),p(23),p(25)):0,
+          rightHip: v(12)?ang(p(12),p(24),p(26)):0,
+          leftElbow: v(11)&&v(13)&&v(15)?ang(p(11),p(13),p(15)):0,
+          rightElbow:v(12)&&v(14)&&v(16)?ang(p(12),p(14),p(16)):0,
+        }}));
+      }catch(e){}
+    }
+  }
+
+  /* ── Init pose ── */
+  const BASE="${MEDIAPIPE_BASE}";
+  const pose=new Pose({locateFile:f=>BASE+"/"+f});
+  pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});
+  pose.onResults(onResults);
+  pose.initialize().then(()=>{
+    loading.classList.add("hide");
+    sizeWrap();
+    setTimeout(detect,100);
+  }).catch(()=>loading.classList.add("hide"));
+
+  /* ── Detect one frame ── */
+  function detect(){
+    if(busy||!video.readyState)return;
+    busy=true;
+    pose.send({image:video}).catch(()=>{busy=false;});
+  }
+
+  /* ── Playback loop ── */
+  let raf=0;
+  function loop(){
+    if(!playing||video.paused||video.ended)return;
+    detect();
+    raf=requestAnimationFrame(loop);
+  }
+
+  /* ── Video ── */
+  video.src=VIDEO_URI;
+  video.load();
+  video.addEventListener("loadedmetadata",()=>{
+    scrub.max=video.duration;
+    timeR.textContent=fmt(video.duration);
+    sizeWrap();
+  });
+  video.addEventListener("loadeddata",()=>setTimeout(detect,80));
+  video.addEventListener("seeked",detect);
+  video.addEventListener("timeupdate",()=>{
+    timeL.textContent=fmt(video.currentTime);
+    scrub.value=video.currentTime;
+  });
+  video.addEventListener("ended",()=>{playing=false;playBtn.innerHTML="&#9654;";cancelAnimationFrame(raf);});
+
+  /* ── Controls ── */
+  function play(){video.play();playing=true;playBtn.innerHTML="&#9646;&#9646;";loop();}
+  function pause(){video.pause();playing=false;playBtn.innerHTML="&#9654;";cancelAnimationFrame(raf);}
+
+  playBtn.onclick=()=>playing?pause():play();
+
+  document.getElementById("bk").onclick=()=>{
+    pause();
+    video.currentTime=Math.max(0,video.currentTime-1/30);
+  };
+  document.getElementById("fw").onclick=()=>{
+    pause();
+    video.currentTime=Math.min(video.duration||99,video.currentTime+1/30);
+  };
+
+  scrub.addEventListener("input",e=>{
+    video.currentTime=parseFloat(e.target.value);
+    setTimeout(detect,40);
+  });
+
+  document.querySelectorAll(".spd").forEach(btn=>{
+    btn.onclick=()=>{
+      video.playbackRate=parseFloat(btn.dataset.s);
+      document.querySelectorAll(".spd").forEach(b=>b.classList.remove("on"));
+      btn.classList.add("on");
     };
   });
-  return (
-    <>
-      <AnimatedCircle animatedProps={props} r={9} fill={stroke + "28"} />
-      <AnimatedCircle animatedProps={props} r={5.5} fill="#06060e" stroke={stroke} strokeWidth={2.5} />
-    </>
-  );
+
+  skelBtn.onclick=()=>{
+    showSkel=!showSkel;
+    skelBtn.className="tbtn "+(showSkel?"on":"off");
+    if(!showSkel){ctx.clearRect(0,0,canvas.width,canvas.height);}
+  };
+})();
+</script>
+</body>
+</html>`;
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function SkeletonScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const { width: screenW, height: screenH } = useWindowDimensions(); // auto-updates on rotate
-  const videoRef = useRef<Video>(null);
+  const { id }    = useLocalSearchParams<{ id: string }>();
+  const insets    = useSafeAreaInsets();
+  const router    = useRouter();
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const webviewRef = useRef<WebView>(null);
 
   const { analyses, videoUris } = useAnalyses();
-  const analysis = analyses.find((a) => a.id === id);
-  const videoUri = id ? videoUris[id] : undefined;
+  const analysis  = analyses.find((a) => a.id === id);
+  const videoUri  = id ? videoUris[id] : undefined;
 
   const isLandscape = screenW > screenH;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  // ── Video state ────────────────────────────────────────────────────────────
-  const [isLoaded,      setIsLoaded]      = useState(false);
-  const [isPlaying,     setIsPlaying]     = useState(true);
-  const [positionMs,    setPositionMs]    = useState(0);
-  const [durationMs,    setDurationMs]    = useState(1);
-  const [scrubberWidth, setScrubberWidth] = useState(200);
-
-  // Visual pct drives the scrubber display; a throttle lets us seek live
-  const [displayPct, setDisplayPct] = useState(0);
-  const lastSeekTime = useRef(0);
-  const SEEK_THROTTLE = 120; // ms — seek at most ~8 fps during drag
-  const isScrubbing = useRef(false);
-
-  function onPlaybackUpdate(s: AVPlaybackStatus) {
-    if (!s.isLoaded) { setIsLoaded(false); return; }
-    setIsLoaded(true);
-    if (!isScrubbing.current) {
-      setIsPlaying(s.isPlaying ?? false);
-      const pos = s.positionMillis ?? 0;
-      setPositionMs(pos);
-      setDisplayPct(durationMs > 1 ? pos / durationMs : 0);
-    }
-    if (s.durationMillis && s.durationMillis > 0) setDurationMs(s.durationMillis);
-  }
-
-  function togglePlay() {
-    if (!isLoaded) return;
-    videoRef.current?.setStatusAsync({ shouldPlay: !isPlaying }).catch(() => {});
-  }
-
-  function pctFromTouch(x: number) {
-    return Math.max(0, Math.min(1, x / Math.max(1, scrubberWidth)));
-  }
-
-  function seekToPct(pct: number) {
-    const pos = Math.floor(pct * durationMs);
-    setPositionMs(pos);
-    videoRef.current?.setPositionAsync(pos).catch(() => {});
-  }
-
-  function onScrubStart(e: GestureResponderEvent) {
-    isScrubbing.current = true;
-    const pct = pctFromTouch(e.nativeEvent.locationX);
-    setDisplayPct(pct);
-    // Pause while scrubbing for smoother frame-by-frame
-    videoRef.current?.setStatusAsync({ shouldPlay: false }).catch(() => {});
-    seekToPct(pct);
-    lastSeekTime.current = Date.now();
-  }
-
-  function onScrubMove(e: GestureResponderEvent) {
-    const pct = pctFromTouch(e.nativeEvent.locationX);
-    setDisplayPct(pct); // always update UI immediately
-    const now = Date.now();
-    if (now - lastSeekTime.current >= SEEK_THROTTLE) {
-      lastSeekTime.current = now;
-      seekToPct(pct);   // throttled actual seek
-    }
-  }
-
-  function onScrubEnd(e: GestureResponderEvent) {
-    const pct = pctFromTouch(e.nativeEvent.locationX);
-    setDisplayPct(pct);
-    seekToPct(pct);
-    isScrubbing.current = false;
-    if (isPlaying) videoRef.current?.setStatusAsync({ shouldPlay: true }).catch(() => {});
-  }
+  const [angles,     setAngles]     = useState<JointAngles | null>(null);
+  const [modelReady, setModelReady] = useState(false);
 
   // ── Orientation ────────────────────────────────────────────────────────────
   async function toggleOrientation() {
@@ -293,217 +362,52 @@ export default function SkeletonScreen() {
   }
   useEffect(() => () => { ScreenOrientation.unlockAsync().catch(() => {}); }, []);
 
-  // ── Breathing animation (very subtle ±2px) ─────────────────────────────────
-  const breathe = useSharedValue(0);
-  useEffect(() => {
-    breathe.value = withRepeat(
-      withTiming(Math.PI * 2, { duration: 3600, easing: Easing.linear }),
-      -1, false,
-    );
-  }, []);
-
-  // ── Pose & risk ────────────────────────────────────────────────────────────
-  const pose = useMemo(() => getPose(analysis?.sport ?? ""), [analysis?.sport]);
-
-  const riskMap = useMemo<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
-    if (!analysis) return map;
-    analysis.injuryRisks.forEach(({ joint, risk }) => {
-      const j = joint.toLowerCase();
-      if (j.includes("lumbar") || j.includes("spine")) { map.spine = risk; }
-      if (j.includes("knee"))     { map.kneeR = risk; map.kneeL = risk; }
-      if (j.includes("hip"))      { map.hip = risk; map.hipL = risk; }
-      if (j.includes("shoulder")) { map.shoulderR = risk; map.shoulderL = risk; }
-      if (j.includes("ankle"))    { map.ankleR = risk; map.ankleL = risk; }
-      if (j.includes("elbow"))    { map.elbowR = risk; map.elbowL = risk; }
-      if (j.includes("wrist"))    { map.wristR = risk; map.wristL = risk; }
-    });
-    return map;
-  }, [analysis]);
-
-  // ── Joint angles ───────────────────────────────────────────────────────────
-  const angles = useMemo(() => {
-    const defs: [string, string, string, string][] = [
-      ["Hip",   "spine",     "hip",   "kneeR"],
-      ["Knee",  "hip",       "kneeR", "ankleR"],
-      ["Elbow", "shoulderR", "elbowR","wristR"],
-    ];
-    return defs.map(([label, jA, vertex, jB]) => {
-      const a = pose[jA], v = pose[vertex], b = pose[jB];
-      if (!a || !v || !b) return null;
-      return { label, vertex, deg: calcAngle(a, v, b), x: v[0], y: v[1] };
-    }).filter(Boolean) as { label: string; vertex: string; deg: number; x: number; y: number }[];
-  }, [pose]);
-
-  // ── Derived dimensions ─────────────────────────────────────────────────────
-  const videoPanelH = isLandscape ? screenH : Math.min(330, screenH * 0.44);
-  const thumbLeft   = Math.max(0, scrubberWidth * displayPct - 7);
-
-  const SVG_W = 320, SVG_H = 400;
-
-  // Per-joint amplitude & phase so breathing looks organic
-  const JOINT_AMP: Record<string, number> = {
-    head:2.2, neck:1.4, spine:0.9, hip:1.0, hipL:1.0,
-    shoulderR:1.6, shoulderL:1.6, elbowR:2.1, elbowL:2.1,
-    wristR:2.8, wristL:2.8, kneeR:1.2, kneeL:1.2,
-    ankleR:0.6, ankleL:0.6, toeR:0.4, toeL:0.4,
-  };
-  const JOINT_PHASE: Record<string, number> = {
-    head:0, neck:0.3, spine:0.1, hip:0.5, hipL:0.7,
-    shoulderR:1.2, shoulderL:0.8, elbowR:1.8, elbowL:1.4,
-    wristR:2.4, wristL:2.0, kneeR:1.1, kneeL:1.3,
-    ankleR:1.7, ankleL:1.9, toeR:2.0, toeL:2.2,
-  };
-
-  function jointStroke(name: string) {
-    const rc = riskColor(riskMap[name] ?? 0);
-    if (rc) return rc;
-    return name.endsWith("R") || name.endsWith("L") ? "#06b6d4" : "#a78bfa";
+  // ── Messages from WebView ──────────────────────────────────────────────────
+  function handleMessage(event: { nativeEvent: { data: string } }) {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type === "angles") {
+        setAngles(msg.data as JointAngles);
+        if (!modelReady) setModelReady(true);
+      }
+    } catch {}
   }
 
-  const scoreKeys = ["technique", "power", "balance", "consistency"] as const;
-  function scoreColor(v: number) { return v >= 80 ? "#22c55e" : v >= 65 ? "#a78bfa" : "#f59e0b"; }
+  // ── HTML (memoised so it doesn't rebuild on every render) ─────────────────
+  const html = React.useMemo(() => buildHtml(videoUri), [videoUri]);
 
-  // ── Video + skeleton panel ─────────────────────────────────────────────────
-  const VideoPanel = (
-    <View style={{ width: screenW, height: videoPanelH, backgroundColor: "#06060e", overflow: "hidden", position: "relative" }}>
-      {videoUri ? (
-        <Video
-          ref={videoRef}
-          source={{ uri: videoUri }}
-          style={{ position: "absolute", top: 0, left: 0, width: screenW, height: videoPanelH }}
-          resizeMode={isLandscape ? ResizeMode.CONTAIN : ResizeMode.COVER}
-          isLooping
-          shouldPlay
-          onPlaybackStatusUpdate={onPlaybackUpdate}
-        />
-      ) : (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Feather name="video" size={40} color="#1e1e2e" />
-          <Text style={{ color: "#3a3a5c", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 10 }}>
-            Upload a video to see pose tracking
-          </Text>
-        </View>
-      )}
-
-      {/* Subtle dark overlay so skeleton lines pop */}
-      {videoUri && <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(4,4,12,0.35)" }} />}
-
-      {/* ── Skeleton SVG ── */}
-      <Svg
-        style={{ position: "absolute", top: 0, left: 0 }}
-        width={screenW}
-        height={videoPanelH}
-        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-      >
-        {/* Bones (static positions from base pose — no jitter) */}
-        {BONES.map(([jA, jB, kind], i) => {
-          const a = pose[jA], b = pose[jB];
-          if (!a || !b) return null;
-          const rc = riskColor(Math.max(riskMap[jA] ?? 0, riskMap[jB] ?? 0));
-          const color = rc ?? BONE_COLOR[kind];
-          return (
-            <Line
-              key={i}
-              x1={a[0]} y1={a[1]}
-              x2={b[0]} y2={b[1]}
-              stroke={color}
-              strokeWidth={kind === "dim" ? 2 : 3.5}
-              strokeLinecap="round"
-              strokeOpacity={0.9}
-            />
-          );
-        })}
-
-        {/* Joints (subtle breathing animation via Reanimated) */}
-        {Object.entries(pose).map(([name, [bx, by]]) => (
-          <G key={name}>
-            <JointDot
-              bx={bx} by={by}
-              amp={JOINT_AMP[name] ?? 1}
-              phaseOffset={JOINT_PHASE[name] ?? 0}
-              breathe={breathe}
-              stroke={jointStroke(name)}
-            />
-          </G>
-        ))}
-      </Svg>
-
-      {/* Angle labels (RN views — easier than SVG foreignObject) */}
-      {angles.map(({ label, vertex, deg, x, y }) => {
-        const sx = screenW / SVG_W, sy = videoPanelH / SVG_H;
-        const px = x * sx, py = y * sy;
-        const ox = vertex === "elbowR" ? -54 : vertex === "kneeR" ? 10 : -48;
-        const oy = vertex === "kneeR"  ?  10 : -34;
-        const c  = deg < 100 ? "#ef4444" : deg < 130 ? "#f59e0b" : "#06b6d4";
-        return (
-          <View key={label} style={{ position: "absolute", left: px + ox, top: py + oy, backgroundColor: "rgba(6,6,14,0.90)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: c + "77" }}>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: c }}>{deg}°</Text>
-          </View>
-        );
-      })}
-
-      {/* POSE TRACKING badge */}
-      <View style={{ position: "absolute", top: 10, left: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#06060e99", borderRadius: 20, borderWidth: 1, borderColor: "#a78bfa44", paddingHorizontal: 10, paddingVertical: 4 }}>
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" }} />
-        <Text style={{ fontSize: 10, color: "#a78bfa", fontFamily: "Inter_600SemiBold", letterSpacing: 1 }}>POSE TRACKING</Text>
-      </View>
-
-      {/* Portrait button (landscape only) */}
-      {isLandscape && (
-        <TouchableOpacity onPress={toggleOrientation} style={{ position: "absolute", top: 10, right: 10 + (insets.right ?? 0), flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }} activeOpacity={0.8}>
-          <Feather name="smartphone" size={13} color="#fff" />
-          <Text style={{ fontSize: 12, color: "#fff", fontFamily: "Inter_600SemiBold" }}>Portrait</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Playback controls */}
-      {videoUri && (
-        <View style={ss.controls}>
-          <TouchableOpacity onPress={togglePlay} style={ss.playBtn} activeOpacity={0.7}>
-            <Feather name={isPlaying && !isScrubbing.current ? "pause" : "play"} size={16} color="#fff" />
-          </TouchableOpacity>
-          <Text style={ss.timeLabel}>{fmtTime(positionMs)}</Text>
-          <View
-            style={ss.scrubOuter}
-            onLayout={(e) => setScrubberWidth(e.nativeEvent.layout.width)}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-            onResponderGrant={onScrubStart}
-            onResponderMove={onScrubMove}
-            onResponderRelease={onScrubEnd}
-          >
-            <View style={ss.scrubTrack} />
-            <View style={[ss.scrubFill, { width: scrubberWidth * displayPct }]} />
-            <View style={[ss.scrubThumb, { left: thumbLeft }]} />
-          </View>
-          <Text style={[ss.timeLabel, { textAlign: "right" }]}>{fmtTime(durationMs)}</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  if (!analysis) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#06060e", alignItems: "center", justifyContent: "center" }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ position: "absolute", top: topPad + 8, left: 20 }}>
-          <Feather name="chevron-left" size={24} color="#8888aa" />
-        </TouchableOpacity>
-        <Text style={{ color: "#8888aa", fontFamily: "Inter_400Regular" }}>Analysis not found</Text>
-      </View>
-    );
+  // ── Angle display helpers ──────────────────────────────────────────────────
+  function angleColor(deg: number) {
+    return deg < 100 ? "#ef4444" : deg < 130 ? "#f59e0b" : "#22c55e";
   }
+
+  const angleCards = angles ? [
+    { label: "L Knee",  deg: angles.leftKnee  },
+    { label: "R Knee",  deg: angles.rightKnee },
+    { label: "L Hip",   deg: angles.leftHip   },
+    { label: "R Hip",   deg: angles.rightHip  },
+    { label: "L Elbow", deg: angles.leftElbow },
+    { label: "R Elbow", deg: angles.rightElbow},
+  ] : [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#06060e" }}>
+    <View style={ss.root}>
+      {/* ── Header ── */}
       {!isLandscape && (
         <View style={[ss.header, { paddingTop: topPad + 8 }]}>
           <TouchableOpacity style={ss.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Feather name="chevron-left" size={18} color="#8888aa" />
           </TouchableOpacity>
-          <Text style={ss.headerTitle} numberOfLines={1} textBreakStrategy="simple">
-            {analysis.sport} · Pose Analysis
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={ss.headerTitle} numberOfLines={1}>
+              {analysis?.sport ?? "Pose"} · AI Tracking
+            </Text>
+            {modelReady && (
+              <Text style={{ fontSize: 10, color: "#22c55e", fontFamily: "Inter_400Regular" }}>
+                ● MediaPipe active
+              </Text>
+            )}
+          </View>
           <TouchableOpacity style={ss.rotateBtn} onPress={toggleOrientation} activeOpacity={0.8}>
             <Feather name="maximize" size={13} color="#fff" />
             <Text style={ss.rotateBtnText}>Fullscreen</Text>
@@ -511,105 +415,77 @@ export default function SkeletonScreen() {
         </View>
       )}
 
-      {isLandscape ? (
-        VideoPanel
-      ) : (
-        <View style={{ flex: 1 }}>
-          {VideoPanel}
-          <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 18 }} showsVerticalScrollIndicator={false}>
+      {/* ── WebView (MediaPipe runs here) ── */}
+      <WebView
+        ref={webviewRef}
+        source={{ html }}
+        style={{ flex: isLandscape ? 1 : undefined, height: isLandscape ? undefined : Math.min(screenH * 0.52, 340) }}
+        allowFileAccess
+        allowFileAccessFromFileURLs
+        allowUniversalAccessFromFileURLs
+        mixedContentMode="always"
+        mediaPlaybackRequiresUserAction={false}
+        javaScriptEnabled
+        domStorageEnabled
+        originWhitelist={["*"]}
+        scrollEnabled={false}
+        onMessage={handleMessage}
+        backgroundColor="#07070f"
+      />
 
-            {/* Joint angle cards */}
-            <Text style={ss.sectionTitle}>JOINT ANGLES</Text>
-            <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-              {angles.map(({ label, deg }) => {
-                const c = deg < 100 ? "#ef4444" : deg < 130 ? "#f59e0b" : "#06b6d4";
-                return (
-                  <View key={label} style={{ flex: 1, backgroundColor: "#0d0d1a", borderRadius: 12, padding: 12, alignItems: "center", borderWidth: 1, borderColor: c + "44" }}>
-                    <Text style={{ fontSize: 24, fontFamily: "Inter_700Bold", color: c }}>{deg}°</Text>
-                    <Text style={{ fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular", textTransform: "capitalize", marginTop: 3 }}>{label}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Scores */}
-            <Text style={ss.sectionTitle}>PERFORMANCE</Text>
-            {scoreKeys.map((key) => {
-              const val = analysis.scores[key];
-              const c   = scoreColor(val);
+      {/* ── Portrait: angle cards ── */}
+      {!isLandscape && angleCards.length > 0 && (
+        <View style={ss.angleSection}>
+          <Text style={ss.sectionLabel}>LIVE JOINT ANGLES</Text>
+          <View style={ss.angleGrid}>
+            {angleCards.filter(a => a.deg > 0).map(({ label, deg }) => {
+              const c = angleColor(deg);
               return (
-                <View key={key} style={ss.scoreRow}>
-                  <Text style={ss.scoreLabel}>{key}</Text>
-                  <View style={ss.scoreBarBg}>
-                    <View style={[ss.scoreBarFill, { width: `${val}%` as any, backgroundColor: c }]} />
-                  </View>
-                  <Text style={[ss.scoreNum, { color: c }]}>{val}</Text>
+                <View key={label} style={[ss.angleCard, { borderColor: c + "44" }]}>
+                  <Text style={[ss.angleDeg, { color: c }]}>{deg}°</Text>
+                  <Text style={ss.angleLabel}>{label}</Text>
                 </View>
               );
             })}
-
-            {analysis.injuryRisks.length > 0 && (
-              <>
-                <View style={ss.divider} />
-                <Text style={ss.sectionTitle}>JOINT RISK</Text>
-                {analysis.injuryRisks.map((r, i) => {
-                  const c = r.risk >= 50 ? "#ef4444" : r.risk >= 25 ? "#f59e0b" : "#22c55e";
-                  return (
-                    <View key={i} style={ss.riskRow}>
-                      <View style={[ss.riskDot, { backgroundColor: c }]} />
-                      <Text style={ss.riskText}>{r.joint}</Text>
-                      <Text style={[ss.riskPct, { color: c }]}>{r.risk}%</Text>
-                    </View>
-                  );
-                })}
-              </>
-            )}
-
-            <View style={ss.divider} />
-            <View style={ss.legendRow}>
-              {[{ c: "#06b6d4", l: "Limb bones" }, { c: "#a78bfa", l: "Spine/torso" }, { c: "#22c55e", l: "Good" }, { c: "#ef4444", l: "High risk" }].map((x) => (
-                <View key={x.l} style={ss.legendItem}>
-                  <View style={[ss.legendDot, { backgroundColor: x.c }]} />
-                  <Text style={ss.legendText}>{x.l}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={{ height: 50 }} />
-          </ScrollView>
+          </View>
         </View>
+      )}
+
+      {/* ── Portrait: no video prompt ── */}
+      {!isLandscape && !videoUri && (
+        <View style={ss.noVideo}>
+          <Feather name="upload" size={28} color="#3a3a5c" />
+          <Text style={ss.noVideoText}>Upload a video from the Analysis screen</Text>
+          <Text style={ss.noVideoSub}>Tap the Upload button at the top of the Analysis page</Text>
+        </View>
+      )}
+
+      {/* ── Landscape: Portrait button overlay ── */}
+      {isLandscape && (
+        <TouchableOpacity onPress={toggleOrientation} style={ss.portraitBtn} activeOpacity={0.8}>
+          <Feather name="smartphone" size={13} color="#fff" />
+          <Text style={ss.rotateBtnText}>Portrait</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
 }
 
 const ss = StyleSheet.create({
+  root:         { flex: 1, backgroundColor: "#07070f" },
   header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#18182a", gap: 12 },
   backBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: "#111118", borderWidth: 1, borderColor: "#18182a", alignItems: "center", justifyContent: "center" },
-  headerTitle:  { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", flex: 1, textTransform: "capitalize" },
+  headerTitle:  { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", textTransform: "capitalize" },
   rotateBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   rotateBtnText:{ fontSize: 12, color: "#fff", fontFamily: "Inter_600SemiBold" },
-
-  controls:     { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "rgba(4,4,12,0.88)" },
-  playBtn:      { width: 34, height: 34, borderRadius: 17, backgroundColor: "#6c63ff", alignItems: "center", justifyContent: "center" },
-  timeLabel:    { fontSize: 11, color: "#c0c0d8", fontFamily: "Inter_400Regular", minWidth: 32 },
-  scrubOuter:   { flex: 1, height: 28, position: "relative", justifyContent: "center" },
-  scrubTrack:   { position: "absolute", left: 0, right: 0, height: 4, backgroundColor: "#2a2a44", borderRadius: 2 },
-  scrubFill:    { position: "absolute", left: 0, height: 4, backgroundColor: "#6c63ff", borderRadius: 2 },
-  scrubThumb:   { position: "absolute", width: 14, height: 14, borderRadius: 7, backgroundColor: "#ffffff", top: 7 },
-
-  sectionTitle: { fontSize: 10, color: "#8888aa", fontFamily: "Inter_600SemiBold", letterSpacing: 1.5, marginBottom: 10 },
-  scoreRow:     { flexDirection: "row", alignItems: "center", marginBottom: 11 },
-  scoreLabel:   { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", width: 88, textTransform: "capitalize" },
-  scoreBarBg:   { flex: 1, height: 5, backgroundColor: "#18182a", borderRadius: 3, marginHorizontal: 10 },
-  scoreBarFill: { height: 5, borderRadius: 3 },
-  scoreNum:     { fontSize: 12, fontFamily: "Inter_600SemiBold", width: 26, textAlign: "right" },
-  divider:      { height: 1, backgroundColor: "#18182a", marginVertical: 14 },
-  riskRow:      { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  riskDot:      { width: 8, height: 8, borderRadius: 4 },
-  riskText:     { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular", flex: 1 },
-  riskPct:      { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  legendRow:    { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  legendItem:   { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendDot:    { width: 8, height: 8, borderRadius: 4 },
-  legendText:   { fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular" },
+  portraitBtn:  { position: "absolute", top: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  angleSection: { paddingHorizontal: 18, paddingTop: 16 },
+  sectionLabel: { fontSize: 10, color: "#8888aa", fontFamily: "Inter_600SemiBold", letterSpacing: 1.5, marginBottom: 10 },
+  angleGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  angleCard:    { width: "30%", flexGrow: 1, backgroundColor: "#0f0f1c", borderRadius: 12, padding: 12, alignItems: "center", borderWidth: 1 },
+  angleDeg:     { fontSize: 22, fontFamily: "Inter_700Bold" },
+  angleLabel:   { fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular", marginTop: 3 },
+  noVideo:      { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 40 },
+  noVideoText:  { fontSize: 14, color: "#4a4a6a", fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  noVideoSub:   { fontSize: 12, color: "#3a3a5c", fontFamily: "Inter_400Regular", textAlign: "center" },
 });
