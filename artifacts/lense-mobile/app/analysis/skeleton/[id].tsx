@@ -7,6 +7,7 @@ import {
   Platform,
   useWindowDimensions,
   StyleSheet,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -510,6 +511,32 @@ export default function SkeletonScreen() {
     { label: "R Elbow", deg: angles.rightElbow, key: "rightElbow" },
   ] as const) : [];
 
+  // Shared video/WebView block — fills the screen in landscape, fixed height
+  // in portrait (so the angle cards below it stay scrollable into view).
+  const mediaBlock = preparing ? (
+    <View style={[ss.webviewSlot, { height: isLandscape ? undefined : Math.min(screenH * 0.52, 340), flex: isLandscape ? 1 : undefined }]}>
+      <ActivityIndicator color="#6c63ff" size="large" />
+      <Text style={ss.preparingText}>Preparing video…</Text>
+    </View>
+  ) : htmlFileUri ? (
+    <WebView
+      ref={webviewRef}
+      source={{ uri: htmlFileUri }}
+      style={{ flex: isLandscape ? 1 : undefined, height: isLandscape ? undefined : Math.min(screenH * 0.52, 340) }}
+      allowFileAccess
+      allowFileAccessFromFileURLs
+      allowUniversalAccessFromFileURLs
+      allowingReadAccessToURL={FileSystem.cacheDirectory ?? "file:///"}
+      mixedContentMode="always"
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled
+      domStorageEnabled
+      originWhitelist={["*", "file://*"]}
+      scrollEnabled={false}
+      onMessage={handleMessage}
+    />
+  ) : null;
+
   return (
     <View style={ss.root}>
       {/* ── Header ── */}
@@ -535,84 +562,70 @@ export default function SkeletonScreen() {
         </View>
       )}
 
-      {/* ── WebView (MediaPipe runs here) ── */}
-      {preparing ? (
-        <View style={[ss.webviewSlot, { height: isLandscape ? undefined : Math.min(screenH * 0.52, 340), flex: isLandscape ? 1 : undefined }]}>
-          <ActivityIndicator color="#6c63ff" size="large" />
-          <Text style={ss.preparingText}>Preparing video…</Text>
-        </View>
-      ) : htmlFileUri ? (
-        <WebView
-          ref={webviewRef}
-          source={{ uri: htmlFileUri }}
-          style={{ flex: isLandscape ? 1 : undefined, height: isLandscape ? undefined : Math.min(screenH * 0.52, 340) }}
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          allowingReadAccessToURL={FileSystem.cacheDirectory ?? "file:///"}
-          mixedContentMode="always"
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled
-          domStorageEnabled
-          originWhitelist={["*", "file://*"]}
-          scrollEnabled={false}
-          onMessage={handleMessage}
-          backgroundColor="#07070f"
-        />
-      ) : null}
+      {isLandscape ? (
+        /* ── Landscape: full-bleed video + Portrait button ── */
+        <>
+          {mediaBlock}
+          <TouchableOpacity onPress={toggleOrientation} style={ss.portraitBtn} activeOpacity={0.8}>
+            <Feather name="smartphone" size={13} color="#fff" />
+            <Text style={ss.rotateBtnText}>Portrait</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        /* ── Portrait: scrollable video + angle cards ── */
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {mediaBlock}
 
-      {/* ── Portrait: angle cards ── */}
-      {!isLandscape && angleCards.length > 0 && (
-        <View style={ss.angleSection}>
-          <View style={ss.angleHeaderRow}>
-            <Text style={ss.sectionLabel}>LIVE JOINT ANGLES</Text>
-            {maxLvl === 2 ? (
-              <View style={[ss.riskPill, { backgroundColor: "#ef444422", borderColor: "#ef444455" }]}>
-                <Feather name="alert-triangle" size={11} color="#ef4444" />
-                <Text style={[ss.riskPillText, { color: "#ef4444" }]}>Injury risk</Text>
+          {/* Angle cards */}
+          {angleCards.length > 0 && (
+            <View style={ss.angleSection}>
+              <View style={ss.angleHeaderRow}>
+                <Text style={ss.sectionLabel}>LIVE JOINT ANGLES</Text>
+                {maxLvl === 2 ? (
+                  <View style={[ss.riskPill, { backgroundColor: "#ef444422", borderColor: "#ef444455" }]}>
+                    <Feather name="alert-triangle" size={11} color="#ef4444" />
+                    <Text style={[ss.riskPillText, { color: "#ef4444" }]}>Injury risk</Text>
+                  </View>
+                ) : maxLvl === 1 ? (
+                  <View style={[ss.riskPill, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b55" }]}>
+                    <Feather name="alert-circle" size={11} color="#f59e0b" />
+                    <Text style={[ss.riskPillText, { color: "#f59e0b" }]}>Caution</Text>
+                  </View>
+                ) : (
+                  <View style={[ss.riskPill, { backgroundColor: "#22c55e22", borderColor: "#22c55e55" }]}>
+                    <Feather name="check-circle" size={11} color="#22c55e" />
+                    <Text style={[ss.riskPillText, { color: "#22c55e" }]}>Good form</Text>
+                  </View>
+                )}
               </View>
-            ) : maxLvl === 1 ? (
-              <View style={[ss.riskPill, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b55" }]}>
-                <Feather name="alert-circle" size={11} color="#f59e0b" />
-                <Text style={[ss.riskPillText, { color: "#f59e0b" }]}>Caution</Text>
+              <View style={ss.angleGrid}>
+                {angleCards.filter(a => a.deg > 0).map(({ label, deg, key }) => {
+                  const lvl = Math.max(0, Math.min(2, risk ? (risk[key] ?? 0) : 0));
+                  const c = RISK_COLORS[lvl];
+                  return (
+                    <View key={label} style={[ss.angleCard, { borderColor: c + "55", backgroundColor: lvl === 2 ? "#ef44440f" : "#0f0f1c" }]}>
+                      <Text style={[ss.angleDeg, { color: c }]}>{deg}°</Text>
+                      <Text style={ss.angleLabel}>{label}</Text>
+                    </View>
+                  );
+                })}
               </View>
-            ) : (
-              <View style={[ss.riskPill, { backgroundColor: "#22c55e22", borderColor: "#22c55e55" }]}>
-                <Feather name="check-circle" size={11} color="#22c55e" />
-                <Text style={[ss.riskPillText, { color: "#22c55e" }]}>Good form</Text>
-              </View>
-            )}
-          </View>
-          <View style={ss.angleGrid}>
-            {angleCards.filter(a => a.deg > 0).map(({ label, deg, key }) => {
-              const lvl = Math.max(0, Math.min(2, risk ? (risk[key] ?? 0) : 0));
-              const c = RISK_COLORS[lvl];
-              return (
-                <View key={label} style={[ss.angleCard, { borderColor: c + "55", backgroundColor: lvl === 2 ? "#ef44440f" : "#0f0f1c" }]}>
-                  <Text style={[ss.angleDeg, { color: c }]}>{deg}°</Text>
-                  <Text style={ss.angleLabel}>{label}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
+            </View>
+          )}
 
-      {/* ── Portrait: no video prompt ── */}
-      {!isLandscape && !videoUri && (
-        <View style={ss.noVideo}>
-          <Feather name="upload" size={28} color="#3a3a5c" />
-          <Text style={ss.noVideoText}>Upload a video from the Analysis screen</Text>
-          <Text style={ss.noVideoSub}>Tap the Upload button at the top of the Analysis page</Text>
-        </View>
-      )}
-
-      {/* ── Landscape: Portrait button overlay ── */}
-      {isLandscape && (
-        <TouchableOpacity onPress={toggleOrientation} style={ss.portraitBtn} activeOpacity={0.8}>
-          <Feather name="smartphone" size={13} color="#fff" />
-          <Text style={ss.rotateBtnText}>Portrait</Text>
-        </TouchableOpacity>
+          {/* No video prompt */}
+          {!videoUri && (
+            <View style={ss.noVideo}>
+              <Feather name="upload" size={28} color="#3a3a5c" />
+              <Text style={ss.noVideoText}>Upload a video from the Analysis screen</Text>
+              <Text style={ss.noVideoSub}>Tap the Upload button at the top of the Analysis page</Text>
+            </View>
+          )}
+        </ScrollView>
       )}
     </View>
   );
