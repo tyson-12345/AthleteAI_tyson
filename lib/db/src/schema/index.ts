@@ -1,20 +1,351 @@
-// Export your models here. Add one export per file
-// export * from "./posts";
-//
-// Each model/table should ideally be split into different files.
-// Each model/table should define a Drizzle table, insert schema, and types:
-//
-//   import { pgTable, text, serial } from "drizzle-orm/pg-core";
-//   import { createInsertSchema } from "drizzle-zod";
-//   import { z } from "zod/v4";
-//
-//   export const postsTable = pgTable("posts", {
-//     id: serial("id").primaryKey(),
-//     title: text("title").notNull(),
-//   });
-//
-//   export const insertPostSchema = createInsertSchema(postsTable).omit({ id: true });
-//   export type InsertPost = z.infer<typeof insertPostSchema>;
-//   export type Post = typeof postsTable.$inferSelect;
+import {
+  pgTable,
+  text,
+  integer,
+  real,
+  boolean,
+  timestamp,
+  jsonb,
+  uuid,
+  pgEnum,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { relations } from "drizzle-orm";
 
-export {}
+// ─── Enums ─────────────────────────────────────────────────────────────────
+
+export const subscriptionTierEnum = pgEnum("subscription_tier", [
+  "free",
+  "pro",
+  "elite",
+]);
+
+export const athleteLevelEnum = pgEnum("athlete_level", [
+  "beginner",
+  "intermediate",
+  "advanced",
+  "elite",
+]);
+
+export const analysisStatusEnum = pgEnum("analysis_status", [
+  "pending",
+  "processing",
+  "complete",
+  "failed",
+]);
+
+export const tipCategoryEnum = pgEnum("tip_category", [
+  "technique",
+  "injury-risk",
+  "mobility",
+  "strength",
+  "conditioning",
+]);
+
+export const tipSeverityEnum = pgEnum("tip_severity", [
+  "info",
+  "warning",
+  "critical",
+]);
+
+export const chatRoleEnum = pgEnum("chat_role", ["user", "assistant"]);
+
+// ─── Users ─────────────────────────────────────────────────────────────────
+
+export const usersTable = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertUserSchema = createInsertSchema(usersTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof usersTable.$inferSelect;
+
+// ─── Athlete Profiles ───────────────────────────────────────────────────────
+
+export const athleteProfilesTable = pgTable("athlete_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" })
+    .unique(),
+  name: text("name").notNull(),
+  sport: text("sport").notNull().default(""),
+  level: athleteLevelEnum("level").notNull().default("beginner"),
+  goals: jsonb("goals").$type<string[]>().notNull().default([]),
+  injuryConcerns: jsonb("injury_concerns").$type<string[]>().notNull().default([]),
+  weeklyGoal: integer("weekly_goal").notNull().default(3),
+  weeklyProgress: integer("weekly_progress").notNull().default(0),
+  streakDays: integer("streak_days").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertAthleteProfileSchema = createInsertSchema(athleteProfilesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAthleteProfile = z.infer<typeof insertAthleteProfileSchema>;
+export type AthleteProfile = typeof athleteProfilesTable.$inferSelect;
+
+// ─── Subscriptions ──────────────────────────────────────────────────────────
+
+export const subscriptionsTable = pgTable("subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" })
+    .unique(),
+  tier: subscriptionTierEnum("tier").notNull().default("free"),
+  status: text("status").notNull().default("active"),
+  revenueCatCustomerId: text("revenue_cat_customer_id"),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type Subscription = typeof subscriptionsTable.$inferSelect;
+
+// ─── Analyses ───────────────────────────────────────────────────────────────
+
+export const analysesTable = pgTable("analyses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  sport: text("sport").notNull(),
+  status: analysisStatusEnum("status").notNull().default("pending"),
+  videoUrl: text("video_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  duration: real("duration"),
+  overallScore: real("overall_score"),
+  techniqueScore: real("technique_score"),
+  powerScore: real("power_score"),
+  balanceScore: real("balance_score"),
+  consistencyScore: real("consistency_score"),
+  mobilityScore: real("mobility_score"),
+  speedScore: real("speed_score"),
+  strengths: jsonb("strengths").$type<string[]>().notNull().default([]),
+  improvements: jsonb("improvements").$type<string[]>().notNull().default([]),
+  comparedToAthlete: text("compared_to_athlete"),
+  similarityScore: real("similarity_score"),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertAnalysisSchema = createInsertSchema(analysesTable).omit({
+  id: true,
+  createdAt: true,
+  uploadedAt: true,
+});
+export type InsertAnalysis = z.infer<typeof insertAnalysisSchema>;
+export type Analysis = typeof analysesTable.$inferSelect;
+
+// ─── Coaching Tips ──────────────────────────────────────────────────────────
+
+export const coachingTipsTable = pgTable("coaching_tips", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  analysisId: uuid("analysis_id")
+    .notNull()
+    .references(() => analysesTable.id, { onDelete: "cascade" }),
+  category: tipCategoryEnum("category").notNull(),
+  severity: tipSeverityEnum("severity").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  drill: text("drill"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertCoachingTipSchema = createInsertSchema(coachingTipsTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCoachingTip = z.infer<typeof insertCoachingTipSchema>;
+export type CoachingTip = typeof coachingTipsTable.$inferSelect;
+
+// ─── Injury Risks ───────────────────────────────────────────────────────────
+
+export const injuryRisksTable = pgTable("injury_risks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  analysisId: uuid("analysis_id")
+    .notNull()
+    .references(() => analysesTable.id, { onDelete: "cascade" }),
+  joint: text("joint").notNull(),
+  riskPercent: real("risk_percent").notNull(),
+  description: text("description").notNull(),
+  prevention: text("prevention").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertInjuryRiskSchema = createInsertSchema(injuryRisksTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertInjuryRisk = z.infer<typeof insertInjuryRiskSchema>;
+export type InjuryRisk = typeof injuryRisksTable.$inferSelect;
+
+// ─── Progress Entries ───────────────────────────────────────────────────────
+
+export const progressEntriesTable = pgTable("progress_entries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  overallScore: real("overall_score").notNull(),
+  techniqueScore: real("technique_score"),
+  powerScore: real("power_score"),
+  balanceScore: real("balance_score"),
+  consistencyScore: real("consistency_score"),
+  mobilityScore: real("mobility_score"),
+  speedScore: real("speed_score"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertProgressEntrySchema = createInsertSchema(progressEntriesTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertProgressEntry = z.infer<typeof insertProgressEntrySchema>;
+export type ProgressEntry = typeof progressEntriesTable.$inferSelect;
+
+// ─── Achievements (catalog) ─────────────────────────────────────────────────
+
+export const achievementsTable = pgTable("achievements", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon").notNull(),
+  requiredCount: integer("required_count").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type Achievement = typeof achievementsTable.$inferSelect;
+
+// ─── User Achievements ──────────────────────────────────────────────────────
+
+export const userAchievementsTable = pgTable("user_achievements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  achievementId: text("achievement_id")
+    .notNull()
+    .references(() => achievementsTable.id, { onDelete: "cascade" }),
+  progress: integer("progress").notNull().default(0),
+  total: integer("total").notNull().default(1),
+  unlockedAt: timestamp("unlocked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type UserAchievement = typeof userAchievementsTable.$inferSelect;
+
+// ─── Chat Messages ──────────────────────────────────────────────────────────
+
+export const chatMessagesTable = pgTable("chat_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  role: chatRoleEnum("role").notNull(),
+  content: text("content").notNull(),
+  referencedAnalysisId: uuid("referenced_analysis_id").references(
+    () => analysesTable.id,
+    { onDelete: "set null" }
+  ),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessagesTable).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ChatMessage = typeof chatMessagesTable.$inferSelect;
+
+// ─── Relations ──────────────────────────────────────────────────────────────
+
+export const usersRelations = relations(usersTable, ({ one, many }) => ({
+  profile: one(athleteProfilesTable, {
+    fields: [usersTable.id],
+    references: [athleteProfilesTable.userId],
+  }),
+  subscription: one(subscriptionsTable, {
+    fields: [usersTable.id],
+    references: [subscriptionsTable.userId],
+  }),
+  analyses: many(analysesTable),
+  progressEntries: many(progressEntriesTable),
+  chatMessages: many(chatMessagesTable),
+  userAchievements: many(userAchievementsTable),
+}));
+
+export const analysesRelations = relations(analysesTable, ({ one, many }) => ({
+  user: one(usersTable, {
+    fields: [analysesTable.userId],
+    references: [usersTable.id],
+  }),
+  tips: many(coachingTipsTable),
+  injuryRisks: many(injuryRisksTable),
+}));
+
+export const coachingTipsRelations = relations(coachingTipsTable, ({ one }) => ({
+  analysis: one(analysesTable, {
+    fields: [coachingTipsTable.analysisId],
+    references: [analysesTable.id],
+  }),
+}));
+
+export const injuryRisksRelations = relations(injuryRisksTable, ({ one }) => ({
+  analysis: one(analysesTable, {
+    fields: [injuryRisksTable.analysisId],
+    references: [analysesTable.id],
+  }),
+}));
+
+export const progressEntriesRelations = relations(progressEntriesTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [progressEntriesTable.userId],
+    references: [usersTable.id],
+  }),
+}));
+
+export const chatMessagesRelations = relations(chatMessagesTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [chatMessagesTable.userId],
+    references: [usersTable.id],
+  }),
+  referencedAnalysis: one(analysesTable, {
+    fields: [chatMessagesTable.referencedAnalysisId],
+    references: [analysesTable.id],
+  }),
+}));
+
+export const userAchievementsRelations = relations(userAchievementsTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [userAchievementsTable.userId],
+    references: [usersTable.id],
+  }),
+  achievement: one(achievementsTable, {
+    fields: [userAchievementsTable.achievementId],
+    references: [achievementsTable.id],
+  }),
+}));

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Platform,
   Animated,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -184,7 +185,7 @@ export default function LandingScreen() {
   });
 
   return (
-    <View style={s.container}>
+    <ScrollView style={s.container} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
       <Animated.View
         style={[s.inner, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
       >
@@ -248,7 +249,7 @@ export default function LandingScreen() {
           <TouchableOpacity
             style={s.secondaryBtn}
             activeOpacity={0.75}
-            onPress={() => router.push("/(tabs)/")}
+            onPress={() => router.push("/auth/login")}
           >
             <Text style={s.secondaryBtnText}>Sign in</Text>
           </TouchableOpacity>
@@ -256,6 +257,6 @@ export default function LandingScreen() {
           <Text style={s.freeNote}>Free to start · No credit card required</Text>
         </View>
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
