@@ -1,5 +1,5 @@
 kind = "mobile"
-previewPath = "/lense-mobile/"
+previewPath = "/"
 title = "AthleteAI Mobile"
 version = "1.0.0"
 id = "artifacts/lense-mobile"
@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 ensurePreviewReachable = "/status"
 name = "expo"
-paths = [ "/lense-mobile/" ]
+paths = [ "/" ]
 localPort = 24284
 
 [services.development]
@@ -24,4 +24,4 @@ run = [ "pnpm", "--filter", "@workspace/lense-mobile", "run", "serve" ]
 
 [services.env]
 PORT = "24284"
-BASE_PATH = "/lense-mobile/"
+BASE_PATH = "/"

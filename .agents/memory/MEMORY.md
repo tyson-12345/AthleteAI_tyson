@@ -1,1 +1,1 @@
-- [WebView file:// origin fix](webview-file-origin.md) — source={{ html }} gives null origin, blocking file:// video + CDN WASM; write HTML to disk and load via file:// URI instead.
+- [Expo + Replit routing / preview](expo-replit-routing.md) — Expo Go uses the separate expo-domain (indep. of previewPath/BASE_PATH); Expo dev web assets are root-absolute so it only renders at "/".
