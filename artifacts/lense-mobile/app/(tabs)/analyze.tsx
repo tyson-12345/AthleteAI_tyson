@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Platform,
   Modal,
@@ -15,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 
 import { useColors } from "@/hooks/useColors";
@@ -141,6 +143,9 @@ export default function AnalyzeScreen() {
         sport: selectedSport.toLowerCase(),
         videoUrl: pendingUri,
       });
+
+      // Persist the local video URI so the skeleton overlay can find it later
+      await AsyncStorage.setItem(`video_uri_${analysis.id}`, pendingUri);
 
       clearInterval(stepInterval);
       setAnalysisStep(ANALYSIS_STEPS.length - 1);

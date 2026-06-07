@@ -6,7 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Redirect, Stack, usePathname } from "expo-router";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -21,11 +21,8 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-const AUTH_ROUTES = ["/auth/login", "/auth/signup", "/", "/onboarding"];
-
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const pathname = usePathname();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -33,12 +30,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         <ActivityIndicator color="#6c63ff" size="large" />
       </View>
     );
-  }
-
-  const isAuthRoute = AUTH_ROUTES.some((r) => pathname === r || pathname.startsWith("/auth/"));
-
-  if (!isAuthenticated && !isAuthRoute) {
-    return <Redirect href="/" />;
   }
 
   return <>{children}</>;

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_URL =
-  (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000") + "/api";
+  (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:5000") + "/api";
 
 const TOKEN_KEY = "auth_token";
 
@@ -19,7 +19,8 @@ export async function clearToken(): Promise<void> {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = 8000
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {
@@ -28,19 +29,25 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: "Request failed" }));
-    const err = new ApiError(
-      body.error ?? "Request failed",
-      res.status,
-      body.code
-    );
-    throw err;
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Request failed" }));
+      throw new ApiError(body.error ?? "Request failed", res.status, body.code);
+    }
+
+    return res.json() as Promise<T>;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return res.json() as Promise<T>;
 }
 
 export class ApiError extends Error {

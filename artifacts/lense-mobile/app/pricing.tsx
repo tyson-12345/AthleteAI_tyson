@@ -11,8 +11,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-
 import { useColors } from "@/hooks/useColors";
 import { useAuth, useTier } from "@/lib/authContext";
 import { subscriptions, type Plan } from "@/lib/api";
@@ -32,10 +30,10 @@ export default function PricingScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   useEffect(() => {
-    subscriptions.plans().then((r) => {
-      setPlans(r.plans);
-      setLoading(false);
-    });
+    subscriptions.plans()
+      .then((r) => { setPlans(r.plans); })
+      .catch(() => {})
+      .finally(() => { setLoading(false); });
   }, []);
 
   async function handleSelectPlan(plan: Plan) {

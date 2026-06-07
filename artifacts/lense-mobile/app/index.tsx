@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/lib/authContext";
 
 const SPORTS = ["Fencing", "Weightlifting", "Basketball", "Golf", "Tennis", "Running"];
 
@@ -27,6 +28,14 @@ export default function LandingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Skip landing page for returning users
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace("/(tabs)");
+    }
+  }, [isLoading, isAuthenticated]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const topPad = Platform.OS === "web" ? 67 : insets.top;

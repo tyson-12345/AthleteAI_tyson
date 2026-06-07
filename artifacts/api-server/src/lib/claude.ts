@@ -131,6 +131,7 @@ Provide 3 tips and 2 injury risks. Make scores realistic and vary them meaningfu
   const block = response.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type");
 
-  const parsed = JSON.parse(block.text);
+  const text = block.text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+  const parsed = JSON.parse(text);
   return parsed;
 }

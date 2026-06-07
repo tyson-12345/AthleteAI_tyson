@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { auth, profile as profileApi, setToken, clearToken, getToken, type Profile, type SubscriptionRecord } from "./api";
+import { auth, profile as profileApi, setToken, clearToken, getToken, ApiError, type Profile, type SubscriptionRecord } from "./api";
 
 interface AuthUser {
   id: string;
@@ -47,6 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Tracks whether a saved token exists — stays true even when the server is
+  // unreachable, so navigation isn't blocked while offline/server is down.
+  const [hasStoredToken, setHasStoredToken] = useState(false);
 
   useEffect(() => {
     restoreSession();
@@ -56,12 +59,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = await getToken();
       if (!token) return;
+      setHasStoredToken(true);
       const { user: u, profile: p, subscription: s } = await auth.me();
       setUser({ id: u.id, email: u.email, name: p?.name ?? "" });
       setUserProfile(p);
       setSubscription(s);
-    } catch {
-      await clearToken();
+    } catch (err) {
+      // Only log out the user when the server explicitly rejects the token.
+      // Network errors (server down, no internet) leave the session intact.
+      if (err instanceof ApiError && err.status === 401) {
+        await clearToken();
+        setHasStoredToken(false);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -70,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function login(email: string, password: string) {
     const { token, user: u } = await auth.login(email, password);
     await setToken(token);
+    setHasStoredToken(true);
     const { profile: p, subscription: s } = await profileApi.get();
     setUser(u);
     setUserProfile(p);
@@ -79,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signup(email: string, password: string, name: string) {
     const { token, user: u } = await auth.signup(email, password, name);
     await setToken(token);
+    setHasStoredToken(true);
     const { profile: p, subscription: s } = await profileApi.get();
     setUser({ ...u, name });
     setUserProfile(p);
@@ -87,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     await clearToken();
+    setHasStoredToken(false);
     setUser(null);
     setUserProfile(null);
     setSubscription(null);
@@ -115,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile: userProfile,
         subscription,
         isLoading,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user || hasStoredToken,
         login,
         signup,
         logout,

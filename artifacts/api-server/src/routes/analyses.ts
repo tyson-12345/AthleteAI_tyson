@@ -18,7 +18,7 @@ const router = Router();
 const createAnalysisSchema = z.object({
   title: z.string().min(1),
   sport: z.string().min(1),
-  videoUrl: z.string().url().optional(),
+  videoUrl: z.string().optional(),
   duration: z.number().positive().optional(),
   jointAngles: z.record(z.number()).optional(),
 });

@@ -30,7 +30,7 @@ export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, subscription } = useAuth();
+  const { user, profile } = useAuth();
   const tier = useTier();
 
   const [recentAnalyses, setRecentAnalyses] = useState<AnalysisRecord[]>([]);
@@ -227,14 +227,14 @@ export default function DashboardScreen() {
         <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Recent Analyses</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/analyze")}>
+            <TouchableOpacity onPress={() => router.navigate("/(tabs)/analyze")}>
               <Text style={s.seeAll}>See all</Text>
             </TouchableOpacity>
           </View>
           {recentAnalyses.length === 0 ? (
             <TouchableOpacity
               style={[s.analysisCard, { justifyContent: "center", flexDirection: "column", gap: 8, paddingVertical: 24 }]}
-              onPress={() => router.push("/(tabs)/analyze")}
+              onPress={() => router.navigate("/(tabs)/analyze")}
               activeOpacity={0.8}
             >
               <Feather name="upload" size={28} color={colors.primary} />
