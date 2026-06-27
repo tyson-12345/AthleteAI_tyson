@@ -1,55 +1,61 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
-import { BlurView } from "expo-blur";
+import { Platform, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useColors } from "@/hooks/useColors";
+import colors from "@/constants/colors";
+
+const C = colors.light;
+const isIOS = Platform.OS === "ios";
+
+function VoltFAB({ focused }: { focused: boolean }) {
+  return (
+    <View
+      style={{
+        width: 60,
+        height: 60,
+        borderRadius: 20,
+        backgroundColor: focused ? "#aee62e" : C.volt,
+        alignItems: "center",
+        justifyContent: "center",
+        marginTop: -22,
+        shadowColor: C.volt,
+        shadowOpacity: 0.55,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 10,
+      }}
+    >
+      <Feather name="plus" size={28} color={C.ink} />
+    </View>
+  );
+}
 
 export default function TabLayout() {
-  const colors = useColors();
-  const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarActiveTintColor: C.volt,
+        tabBarInactiveTintColor: "#5b6472",
         tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.background,
-          borderTopWidth: 0,
-          borderTopColor: "transparent",
+          height: 84 + (isIOS ? insets.bottom : 0),
+          backgroundColor: "#0C0F12",
+          borderTopWidth: 1,
+          borderTopColor: "rgba(255,255,255,0.07)",
           elevation: 0,
-          zIndex: 100,
-          ...(isWeb ? { height: 84 } : {}),
+          position: "absolute",
+          overflow: "visible",
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={60}
-              tint="dark"
-              style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,10,15,0.85)" }]}
-            />
-          ) : (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: colors.background,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                },
-              ]}
-            />
-          ),
         tabBarLabelStyle: {
           fontSize: 10,
-          fontFamily: "Inter_500Medium",
-          marginBottom: isWeb ? 16 : 0,
+          fontFamily: "Inter_600SemiBold",
+          marginBottom: isIOS ? 0 : 6,
         },
+        tabBarIconStyle: { marginTop: 4 },
       }}
     >
       <Tabs.Screen
@@ -58,15 +64,6 @@ export default function TabLayout() {
           title: "Home",
           tabBarIcon: ({ color, size }) => (
             <Feather name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="analyze"
-        options={{
-          title: "Analyze",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="activity" size={size} color={color} />
           ),
         }}
       />
@@ -80,12 +77,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="compare"
+        name="analyze"
         options={{
-          title: "Compare",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="users" size={size} color={color} />
-          ),
+          title: "",
+          tabBarIcon: ({ focused }) => <VoltFAB focused={focused} />,
+          tabBarLabel: () => null,
         }}
       />
       <Tabs.Screen
@@ -95,6 +91,21 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Feather name="message-circle" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="user" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="compare"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

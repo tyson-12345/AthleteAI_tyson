@@ -86,11 +86,13 @@ router.post("/analyses", authenticate, async (req: AuthRequest, res) => {
 
   // Run AI analysis async - don't block the response
   runAnalysis(analysis.id, parsed.data, profile).catch((err) => {
-    console.error("Analysis failed:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Analysis ${analysis.id} failed:`, msg);
     db.update(analysesTable)
       .set({ status: "failed" })
       .where(eq(analysesTable.id, analysis.id))
-      .execute();
+      .execute()
+      .catch((dbErr: unknown) => console.error("Failed to mark analysis as failed:", dbErr));
   });
 
   res.status(202).json({ analysis });
@@ -103,7 +105,7 @@ router.get("/analyses/:id", authenticate, async (req: AuthRequest, res) => {
     .from(analysesTable)
     .where(
       and(
-        eq(analysesTable.id, req.params.id!),
+        eq(analysesTable.id, String(req.params.id)),
         eq(analysesTable.userId, req.userId!)
       )
     )
@@ -134,7 +136,7 @@ router.delete("/analyses/:id", authenticate, async (req: AuthRequest, res) => {
     .delete(analysesTable)
     .where(
       and(
-        eq(analysesTable.id, req.params.id!),
+        eq(analysesTable.id, String(req.params.id)),
         eq(analysesTable.userId, req.userId!)
       )
     )

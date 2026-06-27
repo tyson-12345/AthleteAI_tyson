@@ -5,6 +5,14 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import {
+  Archivo_700Bold,
+  Archivo_800ExtraBold,
+  Archivo_900Black,
+} from "@expo-google-fonts/archivo";
+import {
+  SpaceMono_700Bold,
+} from "@expo-google-fonts/space-mono";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -26,8 +34,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#0a0a0f", alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color="#6c63ff" size="large" />
+      <View style={{ flex: 1, backgroundColor: "#07090B", alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color="#C6FF3A" size="large" />
       </View>
     );
   }
@@ -48,8 +56,8 @@ function RootLayoutNav() {
         name="analysis/[id]"
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: "#0a0a0f" },
-          headerTintColor: "#f0f0f8",
+          headerStyle: { backgroundColor: "#07090B" },
+          headerTintColor: "#F5F5F5",
           headerTitle: "Analysis",
           headerBackTitle: "Back",
         }}
@@ -68,6 +76,10 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Archivo_700Bold,
+    Archivo_800ExtraBold,
+    Archivo_900Black,
+    SpaceMono_700Bold,
   });
 
   useEffect(() => {
@@ -83,7 +95,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <AuthProvider>
           <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#0a0a0f" }}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#07090B" }}>
               <KeyboardProvider>
                 <AuthGate>
                   <RootLayoutNav />

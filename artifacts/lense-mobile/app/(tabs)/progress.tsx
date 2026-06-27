@@ -14,8 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import { useColors } from "@/hooks/useColors";
 import { progress as progressApi, achievements as achievementsApi, type ProgressRecord, type AchievementRecord } from "@/lib/api";
+import colors from "@/constants/colors";
+const C = colors.light;
 
 const METRICS = ["overall", "technique", "power", "balance", "consistency", "mobility", "speed"] as const;
 type MetricKey = typeof METRICS[number];
@@ -41,7 +42,6 @@ function getMetricColor(key: MetricKey, primary: string, success: string, warnin
 }
 
 export default function ProgressScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeMetric, setActiveMetric] = useState<MetricKey>("overall");
@@ -51,9 +51,9 @@ export default function ProgressScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 60;
+  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 84 + 16;
   const chartWidth = SCREEN_WIDTH - 40;
-  const lineColor = getMetricColor(activeMetric, colors.primary, colors.success, colors.warning);
+  const lineColor = getMetricColor(activeMetric, C.volt, C.success, C.warning);
 
   const loadData = useCallback(async () => {
     try {
@@ -90,52 +90,52 @@ export default function ProgressScreen() {
   const gainPct = firstScore > 0 ? Math.round((gained / firstScore) * 100) : 0;
 
   const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: C.background },
     scroll: { flex: 1 },
     header: { paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 20 },
-    title: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.foreground },
-    subtitle: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 4 },
+    title: { fontSize: 28, fontFamily: "Archivo_800ExtraBold", color: C.textPrimary, letterSpacing: -0.5 },
+    subtitle: { fontSize: 14, color: C.textSecondary, fontFamily: "Inter_400Regular", marginTop: 4 },
     section: { paddingHorizontal: 20, marginBottom: 24 },
-    sectionTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 14 },
+    sectionTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.textPrimary, marginBottom: 14 },
     summaryRow: { flexDirection: "row", gap: 12, marginBottom: 24, paddingHorizontal: 20 },
-    summaryCard: { flex: 1, backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
-    summaryValue: { fontSize: 24, fontFamily: "Inter_700Bold", color: colors.foreground },
-    summaryLabel: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 },
+    summaryCard: { flex: 1, backgroundColor: C.surface2, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: C.border, alignItems: "center" },
+    summaryValue: { fontSize: 24, fontFamily: "Archivo_800ExtraBold", color: C.textPrimary, letterSpacing: -0.5 },
+    summaryLabel: { fontSize: 11, color: C.textSecondary, fontFamily: "Inter_400Regular", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 },
     metricPicker: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-    metricChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+    metricChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border },
     metricChipActive: { backgroundColor: lineColor + "22", borderColor: lineColor },
-    metricChipText: { fontSize: 12, fontFamily: "Inter_500Medium", color: colors.mutedForeground, textTransform: "capitalize" },
+    metricChipText: { fontSize: 12, fontFamily: "Inter_500Medium", color: C.textSecondary, textTransform: "capitalize" },
     metricChipTextActive: { color: lineColor },
-    chartContainer: { backgroundColor: colors.card, borderRadius: colors.radius, borderWidth: 1, borderColor: colors.border, padding: 16, overflow: "hidden" },
+    chartContainer: { backgroundColor: C.surface2, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 16, overflow: "hidden" },
     chartLabels: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
-    chartLabel: { fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+    chartLabel: { fontSize: 10, color: C.textSecondary, fontFamily: "Inter_400Regular" },
     achGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
     achCard: {
       width: "47%",
-      backgroundColor: colors.card,
-      borderRadius: colors.radius,
+      backgroundColor: C.surface2,
+      borderRadius: 18,
       padding: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: C.border,
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
     },
     achCardLocked: { opacity: 0.5 },
     achIcon: { fontSize: 28 },
-    achTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.foreground },
-    achDesc: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 },
-    achProgress: { fontSize: 11, color: colors.primary, fontFamily: "Inter_600SemiBold", marginTop: 4 },
-    emptyCard: { backgroundColor: colors.card, borderRadius: colors.radius, padding: 32, borderWidth: 1, borderColor: colors.border, alignItems: "center", gap: 12 },
-    emptyText: { color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14, textAlign: "center" },
-    emptyBtn: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 20 },
+    achTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: C.textPrimary },
+    achDesc: { fontSize: 11, color: C.textSecondary, fontFamily: "Inter_400Regular", marginTop: 2 },
+    achProgress: { fontSize: 11, color: C.volt, fontFamily: "Inter_600SemiBold", marginTop: 4 },
+    emptyCard: { backgroundColor: C.surface2, borderRadius: 18, padding: 32, borderWidth: 1, borderColor: C.border, alignItems: "center", gap: 12 },
+    emptyText: { color: C.textSecondary, fontFamily: "Inter_400Regular", fontSize: 14, textAlign: "center" },
+    emptyBtn: { backgroundColor: C.volt, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 20 },
     emptyBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 },
   });
 
   if (loading) {
     return (
       <View style={[s.container, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={C.volt} />
       </View>
     );
   }
@@ -146,7 +146,7 @@ export default function ProgressScreen() {
         style={s.scroll}
         contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={C.volt} />}
       >
         <View style={s.header}>
           <Text style={s.title}>Progress</Text>
@@ -156,7 +156,7 @@ export default function ProgressScreen() {
         {entries.length === 0 ? (
           <View style={[s.section]}>
             <View style={s.emptyCard}>
-              <Feather name="trending-up" size={32} color={colors.mutedForeground} />
+              <Feather name="trending-up" size={32} color={C.textSecondary} />
               <Text style={s.emptyText}>Complete your first analysis to start tracking progress.</Text>
               <TouchableOpacity style={s.emptyBtn} onPress={() => router.push("/(tabs)/analyze")} activeOpacity={0.85}>
                 <Text style={s.emptyBtnText}>Analyze a Video</Text>
@@ -172,13 +172,13 @@ export default function ProgressScreen() {
                 <Text style={s.summaryLabel}>Current</Text>
               </View>
               <View style={s.summaryCard}>
-                <Text style={[s.summaryValue, { color: gained >= 0 ? colors.success : colors.destructive }]}>
+                <Text style={[s.summaryValue, { color: gained >= 0 ? C.success : C.destructive }]}>
                   {gained >= 0 ? "+" : ""}{gained}
                 </Text>
                 <Text style={s.summaryLabel}>Points Gained</Text>
               </View>
               <View style={s.summaryCard}>
-                <Text style={[s.summaryValue, { color: colors.primary }]}>{gainPct >= 0 ? "+" : ""}{gainPct}%</Text>
+                <Text style={[s.summaryValue, { color: C.volt }]}>{gainPct >= 0 ? "+" : ""}{gainPct}%</Text>
                 <Text style={s.summaryLabel}>Improvement</Text>
               </View>
             </View>
@@ -210,7 +210,7 @@ export default function ProgressScreen() {
                         y1={y}
                         x2={chartWidth}
                         y2={y}
-                        stroke={colors.border}
+                        stroke={C.border}
                         strokeWidth="1"
                       />
                     );
@@ -273,7 +273,7 @@ export default function ProgressScreen() {
                     <Text style={s.achProgress}>{a.progress}/{a.total}</Text>
                   )}
                 </View>
-                {a.unlocked && <Feather name="check-circle" size={16} color={colors.success} />}
+                {a.unlocked && <Feather name="check-circle" size={16} color={C.success} />}
               </View>
             ))}
           </View>

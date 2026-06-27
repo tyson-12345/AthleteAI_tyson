@@ -117,7 +117,7 @@ export default function SignupScreen() {
       marginTop: 8,
     },
     primaryBtnDisabled: { opacity: 0.6 },
-    primaryBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+    primaryBtnText: { color: colors.primaryForeground, fontSize: 16, fontFamily: "Inter_700Bold" },
     loginRow: {
       flexDirection: "row",
       justifyContent: "center",
@@ -218,10 +218,10 @@ export default function SignupScreen() {
           activeOpacity={0.85}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.primaryForeground} />
           ) : (
             <>
-              <Feather name="user-plus" size={18} color="#fff" />
+              <Feather name="user-plus" size={18} color={colors.primaryForeground} />
               <Text style={s.primaryBtnText}>Create Account</Text>
             </>
           )}

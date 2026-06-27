@@ -1,27 +1,53 @@
+// Design system: Volt (#C6FF3A) on Ink (#07090B) — Nike Run Club / Apple Fitness aesthetic
+const VOLT = "#C6FF3A";
+const INK  = "#07090B";
+
 const colors = {
   light: {
-    text: "#f0f0f8",
-    tint: "#6c63ff",
-    background: "#0a0a0f",
-    foreground: "#f0f0f8",
-    card: "#111118",
-    cardForeground: "#f0f0f8",
-    primary: "#6c63ff",
-    primaryForeground: "#ffffff",
-    secondary: "#1a1a2e",
-    secondaryForeground: "#f0f0f8",
-    muted: "#1e1e2e",
-    mutedForeground: "#8888aa",
-    accent: "#6c63ff",
-    accentForeground: "#ffffff",
-    destructive: "#ff4d6d",
-    destructiveForeground: "#ffffff",
-    border: "#1e1e2e",
-    input: "#1e1e2e",
-    success: "#22c55e",
-    warning: "#f59e0b",
+    // Brand
+    volt:    VOLT,
+    ink:     INK,
+
+    // Surfaces (legacy aliases kept so useColors() callers don't break)
+    text:            "#F5F5F5",
+    background:      INK,
+    foreground:      "#F5F5F5",
+    card:            "#111316",      // legacy alias → surface2
+    cardForeground:  "#F5F5F5",
+    surface1:        INK,
+    surface2:        "#111316",
+    surface3:        "#1A1D21",
+    surface4:        "#22262D",
+    muted:           "#1A1D21",      // legacy alias → surface3, used for disabled states
+
+    // Primary = Volt
+    primary:            VOLT,
+    primaryForeground:  INK,         // text ON a primary/volt button → ALWAYS ink
+    tint:               VOLT,
+    accent:             VOLT,
+    accentForeground:   INK,
+
+    // Semantic
+    secondary:           "#1A1D21",
+    secondaryForeground: "#F5F5F5",
+    mutedForeground:     "#6B7280",
+    border:              "#FFFFFF0D",
+    borderStrong:        "#FFFFFF18",
+    input:               "#1A1D21",
+
+    // Status
+    success:     "#22C55E",
+    warning:     "#F59E0B",
+    destructive: "#EF4444",
+    destructiveForeground: "#FFFFFF",
+    energy:      "#FF6B35",
+
+    // Text hierarchy
+    textPrimary:   "#F5F5F5",
+    textSecondary: "#9CA3AF",
+    textTertiary:  "#6B7280",
   },
-  radius: 12,
+  radius: 14,
 };
 
 export default colors;

@@ -20,7 +20,7 @@ export async function clearToken(): Promise<void> {
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  timeoutMs = 8000
+  timeoutMs = 15000
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {

@@ -179,7 +179,7 @@ ${videoUri ? `
     <div class="row" style="gap:6px">
       <button class="tbtn step" id="bk">&#9664;</button>
       <button class="tbtn" id="playBtn">&#9654;</button>
-      <button class="tbtn step" id="fw">&#9654;&#9654;</button>
+      <button class="tbtn step" id="fw">&#9654;|</button>
     </div>
     <div class="row" style="gap:6px">
       <div id="speeds">
@@ -373,14 +373,28 @@ ${videoUri ? `
 
   /* ── Init pose ── */
   const BASE="${MEDIAPIPE_BASE}";
+
+  // Timeout: if the model hasn't loaded in 20s, show a helpful error instead of
+  // spinning forever (CDN slow, no internet, WASM blocked, etc.)
+  const loadTimeout = setTimeout(()=>{
+    if(!loading.classList.contains("hide")){
+      loading.innerHTML='<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="#f59e0b"/></svg><p class="load-text" style="color:#f59e0b">Pose model taking too long</p><p class="load-sub">Check your internet connection. The model downloads ~6 MB on first use.</p><button onclick="location.reload()" style="margin-top:14px;background:#C6FF3A;border:none;color:#07090B;padding:9px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Retry</button>';
+    }
+  }, 20000);
+
   const pose=new Pose({locateFile:f=>BASE+"/"+f});
   pose.setOptions({modelComplexity:1,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});
   pose.onResults(onResults);
   pose.initialize().then(()=>{
+    clearTimeout(loadTimeout);
     loading.classList.add("hide");
+    btxt.textContent="Pose model ready — play to track";
     sizeWrap();
     setTimeout(detect,100);
-  }).catch(()=>loading.classList.add("hide"));
+  }).catch(err=>{
+    clearTimeout(loadTimeout);
+    loading.innerHTML='<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><p class="load-text" style="color:#ef4444">Could not load pose model</p><p class="load-sub">Check your internet connection. '+( err?.message||"Unknown error")+'</p><button onclick="location.reload()" style="margin-top:14px;background:#C6FF3A;border:none;color:#07090B;padding:9px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Retry</button>';
+  });
 
   /* ── Detect one frame ── */
   function detect(){
@@ -431,8 +445,12 @@ ${videoUri ? `
   };
 
   scrub.addEventListener("input",e=>{
+    pause();
     video.currentTime=parseFloat(e.target.value);
-    setTimeout(detect,40);
+    // "seeked" event fires once the frame is ready — pose detection runs there.
+    // The 150ms fallback handles browsers that don't fire seeked on every seek.
+    clearTimeout(scrub._t);
+    scrub._t=setTimeout(detect,150);
   });
 
   document.querySelectorAll(".spd").forEach(btn=>{

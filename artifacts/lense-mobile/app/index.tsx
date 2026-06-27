@@ -76,15 +76,17 @@ export default function LandingScreen() {
     },
     logoText: {
       fontSize: 24,
-      fontFamily: "Inter_700Bold",
+      fontFamily: "Archivo_800ExtraBold",
       color: colors.foreground,
+      letterSpacing: -0.5,
     },
     headline: {
       fontSize: 38,
-      fontFamily: "Inter_700Bold",
+      fontFamily: "Archivo_900Black",
       color: colors.foreground,
       textAlign: "center",
       lineHeight: 44,
+      letterSpacing: -1,
       marginBottom: 14,
     },
     accent: { color: colors.primary },
@@ -168,7 +170,7 @@ export default function LandingScreen() {
       gap: 8,
     },
     primaryBtnText: {
-      color: "#fff",
+      color: colors.primaryForeground,
       fontSize: 16,
       fontFamily: "Inter_700Bold",
     },
@@ -231,18 +233,6 @@ export default function LandingScreen() {
             ))}
           </View>
 
-          <View style={s.statsRow}>
-            {[
-              { value: "10K+", label: "Athletes" },
-              { value: "500K+", label: "Analyses" },
-              { value: "98%", label: "Accuracy" },
-            ].map((stat) => (
-              <View key={stat.label} style={s.stat}>
-                <Text style={s.statValue}>{stat.value}</Text>
-                <Text style={s.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         <View style={s.bottomSection}>
@@ -251,7 +241,7 @@ export default function LandingScreen() {
             activeOpacity={0.85}
             onPress={() => router.push("/onboarding")}
           >
-            <Feather name="zap" size={18} color="#fff" />
+            <Feather name="zap" size={18} color={colors.primaryForeground} />
             <Text style={s.primaryBtnText}>Get Started Free</Text>
           </TouchableOpacity>
 

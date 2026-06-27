@@ -2,32 +2,35 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import { useColors } from "@/hooks/useColors";
 import { useAuth, useTier } from "@/lib/authContext";
 import { analyses as analysesApi, achievements as achievementsApi, type AnalysisRecord, type AchievementRecord } from "@/lib/api";
+import colors from "@/constants/colors";
 
+const C = colors.light;
 const SCORE_KEYS = ["technique", "power", "balance", "consistency", "mobility", "speed"] as const;
 
-function getHour() {
-  const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
+function scoreColor(score: number) {
+  if (score >= 80) return C.success;
+  if (score >= 65) return C.volt;
+  return C.warning;
 }
 
-export default function DashboardScreen() {
-  const colors = useColors();
+function dateLabel() {
+  return new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" }).toUpperCase();
+}
+
+export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -38,8 +41,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 60;
+  const topPad = Platform.OS === "web" ? 24 : insets.top + 8;
+  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 84 + 16;
 
   const loadData = useCallback(async () => {
     try {
@@ -47,7 +50,7 @@ export default function DashboardScreen() {
         analysesApi.list(),
         achievementsApi.list(),
       ]);
-      setRecentAnalyses(analyses.slice(0, 3));
+      setRecentAnalyses(analyses.slice(0, 5));
       setAchievements(ach);
     } catch {
       // ignore
@@ -59,74 +62,16 @@ export default function DashboardScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  function onRefresh() {
-    setRefreshing(true);
-    loadData();
-  }
-
-  function getScoreColor(score: number) {
-    if (score >= 80) return colors.success;
-    if (score >= 65) return colors.primary;
-    return colors.warning;
-  }
-
   const latestComplete = recentAnalyses.find((a) => a.status === "complete");
   const weeklyProgress = profile?.weeklyProgress ?? 0;
-  const weeklyGoal = profile?.weeklyGoal ?? 3;
-  const weekPct = Math.min((weeklyProgress / weeklyGoal) * 100, 100);
-  const unlockedCount = achievements.filter((a) => a.unlocked).length;
-
-  const s = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    scroll: { flex: 1 },
-    header: { paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 20 },
-    greeting: { fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", letterSpacing: 0.5, textTransform: "uppercase" },
-    name: { fontSize: 28, color: colors.foreground, fontFamily: "Inter_700Bold", marginTop: 2 },
-    badge: { alignSelf: "flex-start", backgroundColor: colors.primary + "22", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, marginTop: 8 },
-    badgeText: { color: colors.primary, fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 1 },
-    statsRow: { flexDirection: "row", gap: 12, paddingHorizontal: 20, marginBottom: 24 },
-    statCard: { flex: 1, backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, alignItems: "center", borderWidth: 1, borderColor: colors.border },
-    statValue: { fontSize: 26, fontFamily: "Inter_700Bold", color: colors.foreground },
-    statLabel: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 },
-    overallCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary + "20", borderWidth: 3, borderColor: colors.primary, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-    overallScore: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.primary },
-    section: { paddingHorizontal: 20, marginBottom: 24 },
-    sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-    sectionTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground },
-    seeAll: { fontSize: 13, color: colors.primary, fontFamily: "Inter_500Medium" },
-    weeklyCard: { backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, borderWidth: 1, borderColor: colors.border },
-    weeklyRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-    weeklyLabel: { color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" },
-    weeklyCount: { color: colors.foreground, fontSize: 15, fontFamily: "Inter_600SemiBold" },
-    progressBarBg: { height: 6, backgroundColor: colors.border, borderRadius: 3 },
-    progressBarFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
-    scoreGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-    scoreItem: { width: "30%", backgroundColor: colors.card, borderRadius: colors.radius, padding: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
-    scoreBar: { width: "100%", height: 4, backgroundColor: colors.border, borderRadius: 2, marginTop: 8 },
-    scoreBarFill: { height: 4, borderRadius: 2 },
-    scoreNum: { fontSize: 20, fontFamily: "Inter_700Bold", color: colors.foreground },
-    scoreName: { fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 },
-    analysisCard: { backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 14 },
-    sportIcon: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.primary + "20", alignItems: "center", justifyContent: "center" },
-    analysisTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground, flex: 1 },
-    analysisSport: { fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textTransform: "capitalize", marginTop: 2 },
-    analysisScore: { fontSize: 18, fontFamily: "Inter_700Bold", color: colors.primary },
-    achRow: { flexDirection: "row", gap: 10 },
-    achCard: { backgroundColor: colors.card, borderRadius: colors.radius, padding: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center", width: 90 },
-    achIcon: { fontSize: 24 },
-    achTitle: { fontSize: 10, color: colors.foreground, fontFamily: "Inter_500Medium", marginTop: 4, textAlign: "center" },
-    upgradeCard: { backgroundColor: colors.primary + "15", borderRadius: colors.radius, padding: 16, borderWidth: 1, borderColor: colors.primary + "40", flexDirection: "row", alignItems: "center", gap: 14, marginHorizontal: 20, marginBottom: 24 },
-    upgradeText: { flex: 1 },
-    upgradeTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground },
-    upgradeSub: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 },
-    upgradeBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-    upgradeBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  });
+  const weeklyGoal = profile?.weeklyGoal ?? 4;
+  const streakDays = profile?.streakDays ?? 0;
+  const firstName = (profile?.name ?? user?.name ?? "Athlete").split(" ")[0];
 
   if (loading) {
     return (
       <View style={[s.container, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={C.volt} size="large" />
       </View>
     );
   }
@@ -134,158 +79,183 @@ export default function DashboardScreen() {
   return (
     <View style={s.container}>
       <ScrollView
-        style={s.scroll}
-        contentContainerStyle={{ paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        contentContainerStyle={{ paddingBottom: bottomPad }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={C.volt} />}
       >
-        <View style={s.header}>
-          <Text style={s.greeting}>Good {getHour()}</Text>
-          <Text style={s.name}>{profile?.name ?? user?.name ?? "Athlete"}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{tier} · {profile?.level ?? "beginner"}</Text>
-            </View>
-            {(profile?.streakDays ?? 0) > 0 && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#ff6b3522", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Feather name="zap" size={12} color="#ff6b35" />
-                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#ff6b35" }}>{profile?.streakDays}d streak</Text>
-              </View>
-            )}
+        {/* Header */}
+        <View style={[s.header, { paddingTop: topPad }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.dateLabel}>{dateLabel()}</Text>
+            <Text style={s.welcomeText}>Welcome back, {firstName}</Text>
           </View>
+          <TouchableOpacity style={s.avatar} onPress={() => {}}>
+            <Feather name="user" size={20} color={C.textSecondary} />
+            {tier === "pro" && <View style={s.avatarBadge} />}
+          </TouchableOpacity>
         </View>
 
-        {/* Stats */}
+        {/* Streak + Weekly row */}
         <View style={s.statsRow}>
           <View style={s.statCard}>
-            <View style={s.overallCircle}>
-              <Text style={s.overallScore}>{latestComplete ? Math.round(latestComplete.overallScore ?? 0) : "--"}</Text>
+            <View style={s.statCardHeader}>
+              <Feather name="zap" size={16} color={C.volt} />
+              <Text style={s.statCardLabel}>STREAK</Text>
             </View>
-            <Text style={s.statLabel}>Overall Score</Text>
+            <View style={s.statCardValueRow}>
+              <Text style={s.statCardValue}>{streakDays}</Text>
+              <Text style={s.statCardUnit}>days</Text>
+            </View>
           </View>
           <View style={s.statCard}>
-            <Text style={s.statValue}>{recentAnalyses.length}</Text>
-            <Text style={s.statLabel}>Total Analyses</Text>
-          </View>
-          <View style={s.statCard}>
-            <Text style={s.statValue}>{unlockedCount}</Text>
-            <Text style={s.statLabel}>Achievements</Text>
+            <View style={s.statCardHeader}>
+              <Text style={s.statCardLabel}>THIS WEEK</Text>
+              <Text style={[s.statCardLabel, { color: C.textPrimary }]}>{weeklyProgress}/{weeklyGoal}</Text>
+            </View>
+            <WeekBars progress={weeklyProgress} goal={weeklyGoal} />
           </View>
         </View>
 
-        {/* Upgrade banner for free tier */}
-        {tier === "free" && (
-          <View style={s.upgradeCard}>
-            <Feather name="zap" size={24} color={colors.primary} />
-            <View style={s.upgradeText}>
-              <Text style={s.upgradeTitle}>Upgrade to Pro</Text>
-              <Text style={s.upgradeSub}>Unlock AI coach & unlimited analyses</Text>
+        {/* Hero card — latest analysis */}
+        {latestComplete ? (
+          <TouchableOpacity
+            style={s.heroCard}
+            onPress={() => router.push(`/analysis/${latestComplete.id}`)}
+            activeOpacity={0.88}
+          >
+            <View style={s.heroThumb}>
+              <Feather name="play" size={26} color={C.volt} />
             </View>
-            <TouchableOpacity style={s.upgradeBtn} onPress={() => router.push("/pricing")} activeOpacity={0.85}>
-              <Text style={s.upgradeBtnText}>$9.99/mo</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Weekly goal */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>This Week</Text>
-          <View style={s.weeklyCard}>
-            <View style={s.weeklyRow}>
-              <Text style={s.weeklyLabel}>Sessions completed</Text>
-              <Text style={s.weeklyCount}>{weeklyProgress} / {weeklyGoal}</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={s.sportPill}>
+                  <Text style={s.sportPillText}>{(latestComplete.sport ?? "sport").toUpperCase()}</Text>
+                </View>
+                <Text style={s.heroTime}>Latest</Text>
+              </View>
+              <Text style={s.heroTitle} numberOfLines={1}>{latestComplete.title}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 }}>
+                <Text style={s.heroScore}>{Math.round(latestComplete.overallScore ?? 0)}</Text>
+                <Text style={s.heroScoreLabel}>score</Text>
+              </View>
             </View>
-            <View style={s.progressBarBg}>
-              <View style={[s.progressBarFill, { width: `${weekPct}%` }]} />
-            </View>
-          </View>
-        </View>
-
-        {/* Latest scores */}
-        {latestComplete && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Latest Performance</Text>
-            <View style={s.scoreGrid}>
-              {SCORE_KEYS.map((key) => {
-                const score = Math.round((latestComplete as any)[`${key}Score`] ?? 0);
-                const color = getScoreColor(score);
-                return (
-                  <View key={key} style={s.scoreItem}>
-                    <Text style={s.scoreNum}>{score}</Text>
-                    <Text style={s.scoreName}>{key}</Text>
-                    <View style={s.scoreBar}>
-                      <View style={[s.scoreBarFill, { width: `${score}%`, backgroundColor: color }]} />
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={s.emptyHeroCard} onPress={() => router.push("/(tabs)/analyze")} activeOpacity={0.88}>
+            <Feather name="upload" size={28} color={C.volt} />
+            <Text style={s.emptyHeroTitle}>Upload your first clip</Text>
+            <Text style={s.emptyHeroSub}>Get AI-powered form analysis in seconds</Text>
+          </TouchableOpacity>
         )}
 
         {/* Recent analyses */}
         <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Recent Analyses</Text>
-            <TouchableOpacity onPress={() => router.navigate("/(tabs)/analyze")}>
+          <View style={s.sectionRow}>
+            <Text style={s.sectionTitle}>Recent analyses</Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/analyze")}>
               <Text style={s.seeAll}>See all</Text>
             </TouchableOpacity>
           </View>
           {recentAnalyses.length === 0 ? (
-            <TouchableOpacity
-              style={[s.analysisCard, { justifyContent: "center", flexDirection: "column", gap: 8, paddingVertical: 24 }]}
-              onPress={() => router.navigate("/(tabs)/analyze")}
-              activeOpacity={0.8}
-            >
-              <Feather name="upload" size={28} color={colors.primary} />
-              <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 }}>
-                Upload your first training video
-              </Text>
-            </TouchableOpacity>
+            <Text style={s.emptyMsg}>No analyses yet — tap + to upload a video</Text>
           ) : (
             recentAnalyses.map((a) => (
               <TouchableOpacity
                 key={a.id}
-                style={s.analysisCard}
+                style={s.analysisRow}
                 onPress={() => router.push(`/analysis/${a.id}`)}
                 activeOpacity={0.85}
               >
-                <View style={s.sportIcon}>
-                  <Feather name="activity" size={20} color={colors.primary} />
+                <View style={s.analysisThumb}>
+                  <Feather name="activity" size={18} color={C.textSecondary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.analysisTitle} numberOfLines={1}>{a.title}</Text>
-                  <Text style={s.analysisSport}>{a.sport}</Text>
+                  <Text style={s.analysisMeta}>{(a.sport ?? "sport").toUpperCase()} · {new Date(a.uploadedAt).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}</Text>
                 </View>
                 {a.status === "complete" ? (
-                  <Text style={[s.analysisScore, { color: getScoreColor(a.overallScore ?? 0) }]}>
+                  <Text style={[s.analysisScore, { color: scoreColor(a.overallScore ?? 0) }]}>
                     {Math.round(a.overallScore ?? 0)}
                   </Text>
                 ) : (
-                  <ActivityIndicator color={colors.primary} size="small" />
+                  <ActivityIndicator color={C.volt} size="small" />
                 )}
               </TouchableOpacity>
             ))
           )}
         </View>
 
-        {/* Achievements */}
-        {achievements.filter((a) => a.unlocked).length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Achievements</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
-              <View style={s.achRow}>
-                {achievements.filter((a) => a.unlocked).map((a) => (
-                  <View key={a.id} style={s.achCard}>
-                    <Text style={s.achIcon}>{a.icon}</Text>
-                    <Text style={s.achTitle}>{a.title}</Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
+        {/* Upgrade banner */}
+        {tier === "free" && (
+          <TouchableOpacity style={s.upgradeCard} onPress={() => router.push("/pricing")} activeOpacity={0.88}>
+            <Feather name="zap" size={22} color={C.ink} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.upgradeTitle}>Upgrade to Pro</Text>
+              <Text style={s.upgradeSub}>Unlock AI coach + unlimited analyses</Text>
+            </View>
+            <Text style={s.upgradePrice}>$9.99/mo</Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
   );
 }
+
+function WeekBars({ progress, goal }: { progress: number; goal: number }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 5, marginTop: 14, alignItems: "flex-end", height: 30 }}>
+      {Array.from({ length: goal }).map((_, i) => (
+        <View
+          key={i}
+          style={{
+            flex: 1,
+            height: i < progress ? 24 + (i % 3) * 4 : 16,
+            backgroundColor: i < progress ? C.volt : "#23272e",
+            borderRadius: 4,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12 },
+  dateLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 11, letterSpacing: 1.5, color: C.textSecondary },
+  welcomeText: { fontFamily: "Archivo_800ExtraBold", fontSize: 24, color: C.textPrimary, letterSpacing: -0.5, marginTop: 3 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: C.surface3, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.1)" },
+  avatarBadge: { position: "absolute", top: -1, right: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: C.volt, borderWidth: 2, borderColor: C.background },
+  statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20, marginBottom: 16 },
+  statCard: { flex: 1, backgroundColor: C.surface2, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
+  statCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statCardLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1, color: C.textSecondary },
+  statCardValueRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginTop: 6 },
+  statCardValue: { fontFamily: "Archivo_800ExtraBold", fontSize: 30, color: C.textPrimary, letterSpacing: -1 },
+  statCardUnit: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textSecondary },
+  heroCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: C.surface2, borderRadius: 22, padding: 14, flexDirection: "row", gap: 14, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
+  heroThumb: { width: 92, height: 92, borderRadius: 16, backgroundColor: C.surface3, alignItems: "center", justifyContent: "center" },
+  sportPill: { backgroundColor: "rgba(198,255,58,0.14)", borderWidth: 1, borderColor: "rgba(198,255,58,0.4)", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  sportPillText: { fontFamily: "SpaceMono_700Bold", fontSize: 9, letterSpacing: 1, color: C.volt },
+  heroTime: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textSecondary },
+  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.textPrimary, marginTop: 8 },
+  heroScore: { fontFamily: "Archivo_800ExtraBold", fontSize: 24, color: C.textPrimary, letterSpacing: -0.5 },
+  heroScoreLabel: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textSecondary },
+  emptyHeroCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: C.surface2, borderRadius: 22, padding: 28, alignItems: "center", gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
+  emptyHeroTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.textPrimary },
+  emptyHeroSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary, textAlign: "center" },
+  section: { paddingHorizontal: 20, marginBottom: 20 },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: C.textPrimary },
+  seeAll: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.volt },
+  emptyMsg: { fontFamily: "Inter_400Regular", fontSize: 14, color: C.textSecondary, textAlign: "center", paddingVertical: 16 },
+  analysisRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  analysisThumb: { width: 52, height: 52, borderRadius: 13, backgroundColor: C.surface3, alignItems: "center", justifyContent: "center" },
+  analysisTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.textPrimary },
+  analysisMeta: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1, color: C.textSecondary, marginTop: 2 },
+  analysisScore: { fontFamily: "Archivo_800ExtraBold", fontSize: 17, color: C.textPrimary },
+  upgradeCard: { marginHorizontal: 20, backgroundColor: C.volt, borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+  upgradeTitle: { fontFamily: "Inter_700Bold", fontSize: 14, color: C.ink },
+  upgradeSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(7,9,11,0.7)", marginTop: 1 },
+  upgradePrice: { fontFamily: "Archivo_800ExtraBold", fontSize: 14, color: C.ink },
+});

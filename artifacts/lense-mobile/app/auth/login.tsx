@@ -38,7 +38,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      router.replace("/(tabs)/");
+      router.replace("/(tabs)" as any);
     } catch (e: any) {
       setError(e.message ?? "Login failed");
     } finally {
@@ -119,7 +119,7 @@ export default function LoginScreen() {
       marginTop: 8,
     },
     primaryBtnDisabled: { opacity: 0.6 },
-    primaryBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+    primaryBtnText: { color: colors.primaryForeground, fontSize: 16, fontFamily: "Inter_700Bold" },
     dividerRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -215,10 +215,10 @@ export default function LoginScreen() {
           activeOpacity={0.85}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.primaryForeground} />
           ) : (
             <>
-              <Feather name="log-in" size={18} color="#fff" />
+              <Feather name="log-in" size={18} color={colors.primaryForeground} />
               <Text style={s.primaryBtnText}>Sign In</Text>
             </>
           )}

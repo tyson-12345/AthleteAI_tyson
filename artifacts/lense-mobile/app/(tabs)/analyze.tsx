@@ -66,7 +66,7 @@ export default function AnalyzeScreen() {
   const [selectedSport, setSelectedSport] = useState("");
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 60;
+  const bottomPad = Platform.OS === "web" ? 34 + 84 : insets.bottom + 84 + 16;
 
   const loadAnalyses = useCallback(async () => {
     try {
@@ -175,17 +175,17 @@ export default function AnalyzeScreen() {
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 20 },
-    title: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.foreground },
+    title: { fontSize: 28, fontFamily: "Archivo_800ExtraBold", color: colors.foreground, letterSpacing: -0.5 },
     subtitle: { fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 4 },
     uploadBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary, borderRadius: colors.radius, paddingVertical: 14, paddingHorizontal: 20, marginHorizontal: 20, marginBottom: 20, justifyContent: "center" },
-    uploadBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+    uploadBtnText: { color: "#07090B", fontSize: 15, fontFamily: "Inter_700Bold" },
     card: { backgroundColor: colors.card, borderRadius: colors.radius, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
     cardBody: { padding: 16, flexDirection: "row", alignItems: "center", gap: 14 },
     iconBg: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primary + "20", alignItems: "center", justifyContent: "center" },
     cardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground },
     cardMeta: { fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2, textTransform: "capitalize" },
     scoreCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", borderWidth: 2 },
-    scoreText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+    scoreText: { fontSize: 16, fontFamily: "Archivo_800ExtraBold" },
     empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingTop: 60 },
     emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center", marginBottom: 16 },
     emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 },
@@ -209,7 +209,7 @@ export default function AnalyzeScreen() {
     sportChipTextSelected: { color: colors.primary },
     analyzeBtn: { backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
     analyzeBtnDisabled: { opacity: 0.5 },
-    analyzeBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+    analyzeBtnText: { color: "#07090B", fontSize: 16, fontFamily: "Inter_700Bold" },
     statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
     statusText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   });
@@ -288,7 +288,7 @@ export default function AnalyzeScreen() {
               </Text>
             </View>
             <TouchableOpacity style={s.uploadBtn} onPress={handleUpload} activeOpacity={0.85}>
-              <Feather name="upload" size={18} color="#fff" />
+              <Feather name="upload" size={18} color={colors.primaryForeground} />
               <Text style={s.uploadBtnText}>Upload Training Video</Text>
             </TouchableOpacity>
           </>

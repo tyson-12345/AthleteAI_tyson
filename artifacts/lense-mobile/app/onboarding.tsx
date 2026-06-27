@@ -145,8 +145,9 @@ export default function OnboardingScreen() {
     },
     stepTitle: {
       fontSize: 28,
-      fontFamily: "Inter_700Bold",
+      fontFamily: "Archivo_800ExtraBold",
       color: colors.foreground,
+      letterSpacing: -0.5,
       marginBottom: 6,
     },
     stepSub: {
@@ -235,7 +236,6 @@ export default function OnboardingScreen() {
       justifyContent: "center",
     },
     continueBtnText: {
-      color: "#fff",
       fontSize: 16,
       fontFamily: "Inter_700Bold",
     },
@@ -321,7 +321,7 @@ export default function OnboardingScreen() {
                   </View>
                   {active && (
                     <View style={[s.checkCircle, { backgroundColor: colors.primary }]}>
-                      <Feather name="check" size={14} color="#fff" />
+                      <Feather name="check" size={14} color={colors.primaryForeground} />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -382,7 +382,7 @@ export default function OnboardingScreen() {
                   <Text style={[s.levelLabel, { color: colors.foreground }]}>{inj}</Text>
                   {active && (
                     <View style={[s.checkCircle, { backgroundColor: colors.primary }]}>
-                      <Feather name="check" size={14} color="#fff" />
+                      <Feather name="check" size={14} color={colors.primaryForeground} />
                     </View>
                   )}
                 </TouchableOpacity>
@@ -420,7 +420,7 @@ export default function OnboardingScreen() {
           disabled={!canContinue()}
           activeOpacity={0.85}
         >
-          <Text style={[s.continueBtnText, { color: canContinue() ? "#fff" : colors.mutedForeground }]}>
+          <Text style={[s.continueBtnText, { color: canContinue() ? colors.primaryForeground : colors.mutedForeground }]}>
             {step === TOTAL_STEPS ? "Go to Dashboard →" : "Continue"}
           </Text>
         </TouchableOpacity>

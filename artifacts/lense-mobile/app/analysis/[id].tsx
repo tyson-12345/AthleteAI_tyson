@@ -43,7 +43,7 @@ export default function AnalysisDetailScreen() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [expandedTip, setExpanded]  = useState<string | null>(null);
-  const [activeTab, setActiveTab]   = useState<"scores" | "tips" | "risks">("scores");
+  const [activeTab, setActiveTab]   = useState<"scores" | "tips" | "risks" | "ai">("scores");
 
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom + 20;
 
@@ -145,7 +145,7 @@ export default function AnalysisDetailScreen() {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    heroTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: colors.foreground },
+    heroTitle: { fontSize: 22, fontFamily: "Archivo_800ExtraBold", color: colors.foreground, letterSpacing: -0.4 },
     heroMeta:  { fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 4, textTransform: "capitalize" },
     scoreRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16 },
     overallCircle: {
@@ -154,7 +154,7 @@ export default function AnalysisDetailScreen() {
       backgroundColor: colors.primary + "20",
       alignItems: "center", justifyContent: "center",
     },
-    overallNum:   { fontSize: 26, fontFamily: "Inter_700Bold", color: colors.primary },
+    overallNum:   { fontSize: 26, fontFamily: "Archivo_800ExtraBold", color: colors.primary, letterSpacing: -0.5 },
     overallLabel: { fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
     scoresMini:   { flex: 1, marginLeft: 16, gap: 6 },
     scoreMiniRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -227,7 +227,7 @@ export default function AnalysisDetailScreen() {
           <TouchableOpacity
             style={{
               flexDirection: "row", alignItems: "center", justifyContent: "center",
-              gap: 8, marginTop: 16, backgroundColor: colors.primary + "18",
+              gap: 8, marginTop: 16, backgroundColor: "rgba(255,255,255,0.06)",
               borderRadius: 12, borderWidth: 1, borderColor: colors.primary + "55", paddingVertical: 12,
             }}
             activeOpacity={0.75}
@@ -242,8 +242,9 @@ export default function AnalysisDetailScreen() {
         </View>
 
         <View style={s.tabRow}>
-          {(["scores", "tips", "risks"] as const).map((tab) => {
+          {(["scores", "tips", "risks", "ai"] as const).map((tab) => {
             const active = activeTab === tab;
+            const label = tab === "scores" ? "Highlights" : tab === "risks" ? "Injury" : tab === "tips" ? "Tips" : "AI";
             return (
               <TouchableOpacity
                 key={tab}
@@ -251,8 +252,8 @@ export default function AnalysisDetailScreen() {
                 onPress={() => setActiveTab(tab)}
                 activeOpacity={0.7}
               >
-                <Text style={[s.tabText, { color: active ? "#fff" : colors.mutedForeground, textTransform: "capitalize" }]}>
-                  {tab === "scores" ? "Highlights" : tab === "risks" ? "Injury Risk" : "Tips"}
+                <Text style={[s.tabText, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                  {label}
                 </Text>
               </TouchableOpacity>
             );
@@ -317,6 +318,71 @@ export default function AnalysisDetailScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        )}
+
+        {activeTab === "ai" && (
+          <View style={s.section}>
+            {/* AI-generated performance narrative */}
+            <View style={{ backgroundColor: colors.card, borderRadius: colors.radius, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="cpu" size={14} color={colors.primary} />
+                </View>
+                <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Atlas AI Analysis</Text>
+                <View style={{ marginLeft: "auto" as any, backgroundColor: colors.primary + "22", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.primary, textTransform: "uppercase", letterSpacing: 0.5 }}>Claude AI</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", lineHeight: 20, marginBottom: 10 }}>
+                {"Your "}{analysis.sport}{" session scored "}{Math.round(overallScore)}{"/100 overall. "}
+                {overallScore >= 80
+                  ? "This is an excellent performance — you're demonstrating strong athletic competency in most areas."
+                  : overallScore >= 65
+                  ? "This is a solid session with clear room to grow in targeted areas."
+                  : "There are meaningful areas to address that will significantly improve your performance and safety."}
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_400Regular", lineHeight: 20 }}>
+                {"Your strongest dimension is "}{
+                  SCORE_KEYS.reduce((best, k) => scoreForKey(analysis, k) > scoreForKey(analysis, best) ? k : best, SCORE_KEYS[0])
+                }{" and the area with the most improvement potential is "}{
+                  SCORE_KEYS.reduce((worst, k) => scoreForKey(analysis, k) < scoreForKey(analysis, worst) ? k : worst, SCORE_KEYS[0])
+                }{". "}
+                {tips.length > 0 && `Atlas has identified ${tips.length} coaching tip${tips.length > 1 ? "s" : ""} and ${risks.length} injury risk factor${risks.length !== 1 ? "s" : ""} to address in your training.`}
+              </Text>
+            </View>
+
+            {/* Key insight cards */}
+            {tips.slice(0, 2).map((tip) => {
+              const cfg = SEVERITY_CONFIG[tip.severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.info;
+              return (
+                <View key={tip.id} style={[s.tipCard, { borderColor: cfg.color + "44" }]}>
+                  <View style={s.tipHeader}>
+                    <Feather name={cfg.icon} size={14} color={cfg.color} />
+                    <Text style={s.tipTitle}>{tip.title}</Text>
+                    <Text style={{ fontSize: 10, color: cfg.color, fontFamily: "Inter_600SemiBold", textTransform: "uppercase" }}>{cfg.label}</Text>
+                  </View>
+                  <View style={s.tipBody}>
+                    <Text style={s.tipDesc}>{tip.description}</Text>
+                    {tip.drill && (
+                      <View style={s.drillBox}>
+                        <Text style={s.drillLabel}>Drill</Text>
+                        <Text style={s.drillText}>{tip.drill}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, marginTop: 4 }}
+              activeOpacity={0.8}
+              onPress={() => setActiveTab("tips")}
+            >
+              <Feather name="list" size={14} color={colors.primaryForeground} />
+              <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground }}>See All {tips.length} Tips</Text>
+            </TouchableOpacity>
           </View>
         )}
 
