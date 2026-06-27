@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
+import colors from "@/constants/colors";
+const C = colors.light;
 import * as ScreenOrientation from "expo-screen-orientation";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -29,7 +31,7 @@ interface JointAngles {
 // 0 = safe, 1 = caution, 2 = injury risk (matches the WebView risk model)
 type RiskMap = Record<keyof JointAngles, number>;
 
-const RISK_COLORS = ["#22c55e", "#f59e0b", "#ef4444"];
+const RISK_COLORS = ["#C6FF3A", "#FFC53D", "#FF5A4D"];
 
 // Is angle `a` a more extreme (worse) pattern than `b` for this joint?
 // Knees fail at both ends (deep bend / hyperextension) so we measure distance
@@ -85,7 +87,7 @@ function buildHtml(videoUri: string | undefined): string {
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:#07070f;font-family:-apple-system,sans-serif;color:#f0f0f8}
+html,body{width:100%;height:100%;overflow:hidden;background:#07090B;font-family:-apple-system,sans-serif;color:#EAEFF5}
 
 /* ── Video area ── */
 #wrap{position:relative;width:100%;background:#000}
@@ -94,57 +96,57 @@ canvas{pointer-events:none}
 
 /* ── Badge ── */
 #badge{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;
-  background:rgba(4,4,12,.88);border:1px solid rgba(34,211,238,.30);
-  border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22d3ee}
-#dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399;flex-shrink:0}
+  background:rgba(7,9,11,.88);border:1px solid rgba(198,255,58,.30);
+  border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#C6FF3A}
+#dot{width:7px;height:7px;border-radius:50%;background:#C6FF3A;box-shadow:0 0 6px #C6FF3A;flex-shrink:0}
 
 /* ── No video placeholder ── */
 #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:10px;color:#3a3a5c;font-size:13px}
 
 /* ── Loading overlay ── */
-#loading{position:fixed;inset:0;z-index:99;background:rgba(4,4,12,.92);
+#loading{position:fixed;inset:0;z-index:99;background:rgba(7,9,11,.92);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
 #loading.hide{display:none}
-.spin{width:38px;height:38px;border:3px solid #6c63ff33;border-top-color:#6c63ff;
+.spin{width:38px;height:38px;border:3px solid rgba(198,255,58,0.2);border-top-color:#C6FF3A;
   border-radius:50%;animation:sp .75s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .load-text{font-size:14px;font-weight:600}
-.load-sub{font-size:11px;color:#8888aa}
+.load-sub{font-size:11px;color:#8a94a6}
 
 /* ── Controls bar ── */
-#ctrl{position:fixed;bottom:0;left:0;right:0;background:rgba(4,4,12,.96);
+#ctrl{position:fixed;bottom:0;left:0;right:0;background:rgba(7,9,11,.96);
   padding:10px 14px 14px;display:flex;flex-direction:column;gap:9px}
 .row{display:flex;align-items:center;gap:8px}
 
 /* Scrub */
-#timeL,#timeR{font-size:11px;color:#8888aa;font-variant-numeric:tabular-nums;min-width:32px}
+#timeL,#timeR{font-size:11px;color:#8a94a6;font-variant-numeric:tabular-nums;min-width:32px}
 #timeR{text-align:right}
-#scrub{flex:1;height:4px;accent-color:#6c63ff;cursor:pointer}
+#scrub{flex:1;height:4px;accent-color:#C6FF3A;cursor:pointer}
 
 /* Buttons */
-.tbtn{background:#1c1c2e;border:none;border-radius:10px;color:#e0e0f0;
+.tbtn{background:#121519;border:none;border-radius:10px;color:#EAEFF5;
   display:flex;align-items:center;justify-content:center;cursor:pointer}
-#playBtn{width:42px;height:42px;background:#6c63ff;border-radius:13px;
-  box-shadow:0 0 18px #6c63ff77}
+#playBtn{width:42px;height:42px;background:#C6FF3A;border-radius:13px;color:#07090B;
+  box-shadow:0 0 18px rgba(198,255,58,.5)}
 .step{width:34px;height:34px;font-size:16px}
 
 /* Speed pills */
-#speeds{display:flex;gap:2px;background:#1c1c2e;padding:4px;border-radius:10px}
-.spd{border:none;background:transparent;color:#8888aa;font-size:11px;font-weight:700;
+#speeds{display:flex;gap:2px;background:#121519;padding:4px;border-radius:10px}
+.spd{border:none;background:transparent;color:#8a94a6;font-size:11px;font-weight:700;
   padding:4px 9px;border-radius:7px;cursor:pointer;transition:all .15s}
-.spd.on{background:#6c63ff;color:#fff}
+.spd.on{background:#C6FF3A;color:#07090B}
 
 /* Skeleton toggle */
 #skelBtn{padding:6px 11px;font-size:11px;font-weight:700;border-radius:9px;cursor:pointer;
   border:1px solid transparent;transition:all .15s}
-#skelBtn.on{background:rgba(34,211,238,.12);color:#22d3ee;border-color:rgba(34,211,238,.28)}
-#skelBtn.off{background:#1c1c2e;color:#8888aa}
+#skelBtn.on{background:rgba(198,255,58,.12);color:#C6FF3A;border-color:rgba(198,255,58,.28)}
+#skelBtn.off{background:#121519;color:#8a94a6}
 
 /* Risk legend */
 #legend{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:5px;
-  background:rgba(4,4,12,.82);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:8px 11px}
-.lg{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:#c0c0d0;letter-spacing:.3px}
+  background:rgba(7,9,11,.82);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:8px 11px}
+.lg{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;color:#EAEFF5;letter-spacing:.3px}
 .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 </style>
 </head>
@@ -258,8 +260,8 @@ ${videoUri ? `
     ctx.restore();
   }
 
-  /* Risk colors: 0 safe, 1 caution, 2 risk */
-  const RL=["#22c55e","#f59e0b","#ef4444"];
+  /* Risk colors: 0 safe (volt), 1 caution (amber), 2 risk (red) */
+  const RL=["#C6FF3A","#FFC53D","#FF5A4D"];
   /* Map an angle to a risk level given low/high caution+risk thresholds */
   function lvl(a,loRisk,loWarn,hiWarn,hiRisk){
     if(a<=loRisk||a>=hiRisk)return 2;
@@ -291,13 +293,13 @@ ${videoUri ? `
     if(v(12)&&v(14)&&v(16)){const a=ang(p(12),p(14),p(16));jr[14]={deg:a,lvl:lvl(a,-1,-1,160,172)};}
     let maxLvl=0;Object.keys(jr).forEach(k=>{if(jr[k].lvl>maxLvl)maxLvl=jr[k].lvl;});
 
-    /* Bones — colored by risk if attached to a flagged joint, else L/R */
+    /* Bones — colored by risk if attached to a flagged joint, else default volt */
     CONN.forEach(([a,b])=>{
       if(!v(a)||!v(b))return;
       const pA=p(a),pB=p(b);
       const rm=Math.max(jr[a]?jr[a].lvl:-1, jr[b]?jr[b].lvl:-1);
       const col=rm>=1?RL[rm]
-        :LI.has(a)&&LI.has(b)?"#22d3ee":RI.has(a)&&RI.has(b)?"#a78bfa":"rgba(255,255,255,.5)";
+        :LI.has(a)&&LI.has(b)?"rgba(198,255,58,0.7)":RI.has(a)&&RI.has(b)?"rgba(198,255,58,0.55)":"rgba(198,255,58,0.4)";
       ctx.save();
       ctx.strokeStyle=col;ctx.lineWidth=rm>=1?4.5:3.5;ctx.lineCap="round";
       ctx.shadowBlur=rm>=2?17:10;ctx.shadowColor=col;ctx.globalAlpha=.92;
@@ -305,13 +307,13 @@ ${videoUri ? `
       ctx.restore();
     });
 
-    /* Joints — risk joints colored + pulse ring, others L/R */
+    /* Joints — risk joints colored + pulse ring, others volt */
     let seen=0;
     KJ.forEach(i=>{
       if(!v(i))return;seen++;
       const pt=p(i);
       const risk=jr[i];
-      const col=risk?RL[risk.lvl]:(LI.has(i)?"#22d3ee":RI.has(i)?"#a78bfa":"#fff");
+      const col=risk?RL[risk.lvl]:"#C6FF3A";
       const r=risk&&risk.lvl===2?9:risk&&risk.lvl===1?7.5:6.5;
       ctx.save();
       if(risk&&risk.lvl===2){
@@ -321,7 +323,7 @@ ${videoUri ? `
       }
       ctx.shadowBlur=risk&&risk.lvl===2?18:14;ctx.shadowColor=col;
       ctx.fillStyle=col;ctx.beginPath();ctx.arc(pt.x,pt.y,r,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle="#07070f";ctx.beginPath();ctx.arc(pt.x,pt.y,3,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#07090B";ctx.beginPath();ctx.arc(pt.x,pt.y,3,0,Math.PI*2);ctx.fill();
       ctx.restore();
     });
     btxt.textContent=seen>0?seen+" joints tracked":"Pose active";
@@ -773,9 +775,23 @@ export default function SkeletonScreen() {
           {/* No video prompt */}
           {!videoUri && (
             <View style={ss.noVideo}>
-              <Feather name="upload" size={28} color="#3a3a5c" />
+              <Feather name="upload" size={28} color={C.textTertiary} />
               <Text style={ss.noVideoText}>Upload a video from the Analysis screen</Text>
               <Text style={ss.noVideoSub}>Tap the Upload button at the top of the Analysis page</Text>
+            </View>
+          )}
+
+          {/* Ask your coach CTA */}
+          {modelReady && videoUri && (
+            <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 }}>
+              <TouchableOpacity
+                style={{ height: 54, backgroundColor: C.volt, borderRadius: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 }}
+                onPress={() => router.push("/(tabs)/chat")}
+                activeOpacity={0.85}
+              >
+                <Feather name="message-circle" size={19} color={C.ink} />
+                <Text style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: C.ink }}>Ask your coach</Text>
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
@@ -785,35 +801,35 @@ export default function SkeletonScreen() {
 }
 
 const ss = StyleSheet.create({
-  root:         { flex: 1, backgroundColor: "#07070f" },
-  header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#18182a", gap: 12 },
-  backBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: "#111118", borderWidth: 1, borderColor: "#18182a", alignItems: "center", justifyContent: "center" },
-  headerTitle:  { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#f0f0f8", textTransform: "capitalize" },
-  rotateBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  rotateBtnText:{ fontSize: 12, color: "#fff", fontFamily: "Inter_600SemiBold" },
-  portraitBtn:  { position: "absolute", top: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#6c63ff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  root:         { flex: 1, backgroundColor: "#07090B" },
+  header:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.07)", gap: 12 },
+  backBtn:      { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
+  headerTitle:  { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#EAEFF5", textTransform: "capitalize" },
+  rotateBtn:    { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  rotateBtnText:{ fontSize: 12, color: "#EAEFF5", fontFamily: "Inter_600SemiBold" },
+  portraitBtn:  { position: "absolute", top: 14, right: 14, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
   angleSection: { paddingHorizontal: 18, paddingTop: 16 },
   angleHeaderRow:{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  sectionLabel: { fontSize: 10, color: "#8888aa", fontFamily: "Inter_600SemiBold", letterSpacing: 1.5 },
+  sectionLabel: { fontSize: 10, color: "#8a94a6", fontFamily: "SpaceMono_700Bold", letterSpacing: 1.5 },
   riskPill:     { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
   riskPillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   angleGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  angleCard:    { width: "30%", flexGrow: 1, backgroundColor: "#0f0f1c", borderRadius: 12, padding: 12, alignItems: "center", borderWidth: 1 },
-  angleDeg:     { fontSize: 22, fontFamily: "Inter_700Bold" },
-  angleLabel:   { fontSize: 10, color: "#8888aa", fontFamily: "Inter_400Regular", marginTop: 3 },
+  angleCard:    { width: "30%", flexGrow: 1, backgroundColor: "#121519", borderRadius: 14, padding: 12, alignItems: "center", borderWidth: 1 },
+  angleDeg:     { fontSize: 22, fontFamily: "Archivo_800ExtraBold", letterSpacing: -0.5 },
+  angleLabel:   { fontSize: 10, color: "#8a94a6", fontFamily: "Inter_400Regular", marginTop: 3 },
   noVideo:       { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 40 },
-  noVideoText:   { fontSize: 14, color: "#4a4a6a", fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  noVideoSub:    { fontSize: 12, color: "#3a3a5c", fontFamily: "Inter_400Regular", textAlign: "center" },
-  webviewSlot:   { backgroundColor: "#07070f", alignItems: "center", justifyContent: "center", gap: 10 },
-  preparingText: { fontSize: 12, color: "#8888aa", fontFamily: "Inter_400Regular" },
+  noVideoText:   { fontSize: 14, color: "#5b6472", fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  noVideoSub:    { fontSize: 12, color: "#3a414d", fontFamily: "Inter_400Regular", textAlign: "center" },
+  webviewSlot:   { backgroundColor: "#07090B", alignItems: "center", justifyContent: "center", gap: 10 },
+  preparingText: { fontSize: 12, color: "#8a94a6", fontFamily: "Inter_400Regular" },
   summarySection:{ paddingHorizontal: 18, paddingTop: 22, gap: 10 },
-  okCard:        { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: "#0f1c12", borderWidth: 1, borderColor: "#22c55e33", borderRadius: 14, padding: 14 },
-  okTitle:       { fontSize: 13, color: "#d8f5e0", fontFamily: "Inter_600SemiBold" },
-  okBody:        { fontSize: 12, color: "#7a9a82", fontFamily: "Inter_400Regular", marginTop: 3, lineHeight: 17 },
-  insightCard:   { backgroundColor: "#0f0f1c", borderRadius: 12, borderLeftWidth: 3, padding: 14, gap: 7 },
+  okCard:        { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: "rgba(198,255,58,0.08)", borderWidth: 1, borderColor: "rgba(198,255,58,0.25)", borderRadius: 16, padding: 14 },
+  okTitle:       { fontSize: 13, color: "#EAEFF5", fontFamily: "Inter_600SemiBold" },
+  okBody:        { fontSize: 12, color: "#8a94a6", fontFamily: "Inter_400Regular", marginTop: 3, lineHeight: 17 },
+  insightCard:   { backgroundColor: "#121519", borderRadius: 14, borderLeftWidth: 3, padding: 14, gap: 7 },
   insightHead:   { flexDirection: "row", alignItems: "center", gap: 7 },
   insightTitle:  { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  insightTag:    { fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.8, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden" },
-  insightBody:   { fontSize: 12, color: "#a0a0bc", fontFamily: "Inter_400Regular", lineHeight: 18 },
-  disclaimer:    { fontSize: 10, color: "#55556e", fontFamily: "Inter_400Regular", lineHeight: 14, marginTop: 4, fontStyle: "italic" },
+  insightTag:    { fontSize: 9, fontFamily: "SpaceMono_700Bold", letterSpacing: 0.8, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden" },
+  insightBody:   { fontSize: 12, color: "#8a94a6", fontFamily: "Inter_400Regular", lineHeight: 18 },
+  disclaimer:    { fontSize: 10, color: "#5b6472", fontFamily: "Inter_400Regular", lineHeight: 14, marginTop: 4, fontStyle: "italic" },
 });

@@ -120,6 +120,8 @@ export const profile = {
 
 // ─── Analyses ─────────────────────────────────────────────────────────────────
 
+export type JointKey = "leftKnee" | "rightKnee" | "leftHip" | "rightHip" | "leftElbow" | "rightElbow";
+
 export interface AnalysisRecord {
   id: string;
   userId: string;
@@ -172,7 +174,7 @@ export const analyses = {
     request<{ analysis: AnalysisRecord }>("/analyses", {
       method: "POST",
       body: JSON.stringify(data),
-    }),
+    }, 120000),  // Claude analysis can take up to 2 minutes
 
   get: (id: string) =>
     request<{ analysis: AnalysisRecord; tips: TipRecord[]; injuryRisks: RiskRecord[] }>(

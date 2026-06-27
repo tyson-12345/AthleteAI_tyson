@@ -16,11 +16,11 @@ import { generateAnalysis } from "../lib/claude.js";
 const router = Router();
 
 const createAnalysisSchema = z.object({
-  title: z.string().min(1),
-  sport: z.string().min(1),
-  videoUrl: z.string().optional(),
-  duration: z.number().positive().optional(),
-  jointAngles: z.record(z.number()).optional(),
+  title: z.string().min(1).max(200),
+  sport: z.string().min(1).max(50),
+  videoUrl: z.string().url().max(2048).optional(),
+  duration: z.number().positive().max(7200).optional(),
+  jointAngles: z.record(z.number().min(-360).max(360)).refine((v) => Object.keys(v).length <= 20, "Too many joint angles").optional(),
 });
 
 const FREE_TIER_LIMIT = 3;

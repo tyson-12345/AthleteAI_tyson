@@ -174,9 +174,12 @@ export default function HomeScreen() {
                   <Text style={s.analysisMeta}>{(a.sport ?? "sport").toUpperCase()} · {new Date(a.uploadedAt).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()}</Text>
                 </View>
                 {a.status === "complete" ? (
-                  <Text style={[s.analysisScore, { color: scoreColor(a.overallScore ?? 0) }]}>
-                    {Math.round(a.overallScore ?? 0)}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <RiskDots analysis={a} />
+                    <Text style={[s.analysisScore, { color: scoreColor(a.overallScore ?? 0) }]}>
+                      {Math.round(a.overallScore ?? 0)}
+                    </Text>
+                  </View>
                 ) : (
                   <ActivityIndicator color={C.volt} size="small" />
                 )}
@@ -197,6 +200,28 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+// Three colored dots showing technique / power / balance risk levels from the mockup
+function RiskDots({ analysis }: { analysis: AnalysisRecord }) {
+  const scores = [
+    analysis.techniqueScore ?? 0,
+    analysis.powerScore ?? 0,
+    analysis.balanceScore ?? 0,
+  ];
+  return (
+    <View style={{ flexDirection: "row", gap: 3 }}>
+      {scores.map((score, i) => (
+        <View
+          key={i}
+          style={{
+            width: 7, height: 7, borderRadius: 4,
+            backgroundColor: score >= 80 ? "#C6FF3A" : score >= 60 ? "#FFC53D" : "#FF5A4D",
+          }}
+        />
+      ))}
     </View>
   );
 }
