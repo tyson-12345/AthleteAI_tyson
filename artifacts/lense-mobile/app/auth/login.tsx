@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,14 +21,16 @@ export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, profile } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
 
+  const passwordRef = useRef<TextInput>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -38,13 +40,20 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      router.replace("/(tabs)" as any);
+      // Redirect to onboarding if user hasn't set a sport yet
+      if (!profile?.sport) {
+        router.replace("/onboarding");
+      } else {
+        router.replace("/(tabs)" as any);
+      }
     } catch (e: any) {
-      setError(e.message ?? "Login failed");
+      setError(e.message ?? "Login failed. Check your email and password.");
     } finally {
       setLoading(false);
     }
   }
+
+  const canSubmit = email.trim().length > 0 && password.length >= 8;
 
   const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -54,91 +63,56 @@ export default function LoginScreen() {
       paddingTop: topPad + 24,
       paddingBottom: bottomPad + 24,
     },
-    backBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 32,
-    },
+    backBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 32 },
     backText: { color: colors.mutedForeground, fontSize: 14, fontFamily: "Inter_400Regular" },
     logo: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 32 },
     logoIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+      width: 40, height: 40, borderRadius: 12,
       backgroundColor: colors.primary + "22",
-      borderWidth: 1.5,
-      borderColor: colors.primary + "44",
-      alignItems: "center",
-      justifyContent: "center",
+      borderWidth: 1.5, borderColor: colors.primary + "44",
+      alignItems: "center", justifyContent: "center",
     },
     logoText: { fontSize: 20, fontFamily: "Inter_700Bold", color: colors.foreground },
-    heading: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 8 },
+    heading: { fontSize: 28, fontFamily: "Archivo_800ExtraBold", color: colors.foreground, marginBottom: 8, letterSpacing: -0.5 },
     subheading: { fontSize: 15, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 32 },
     label: { fontSize: 13, fontFamily: "Inter_500Medium", color: colors.foreground, marginBottom: 6 },
     inputWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 16,
-      paddingHorizontal: 14,
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: colors.card, borderRadius: 12,
+      borderWidth: 1.5, borderColor: "rgba(255,255,255,0.08)",
+      marginBottom: 16, paddingHorizontal: 14,
     },
     inputWrapFocused: { borderColor: colors.primary },
     input: {
-      flex: 1,
-      paddingVertical: 14,
-      color: colors.foreground,
-      fontSize: 15,
-      fontFamily: "Inter_400Regular",
+      flex: 1, paddingVertical: 14,
+      color: colors.foreground, fontSize: 15, fontFamily: "Inter_400Regular",
     },
     eyeBtn: { padding: 4 },
     errorBox: {
-      backgroundColor: "#ff444422",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: "#ff4444",
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      marginBottom: 16,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
+      backgroundColor: "#ff444422", borderRadius: 10,
+      borderWidth: 1, borderColor: "#ff4444",
+      paddingHorizontal: 14, paddingVertical: 10,
+      marginBottom: 16, flexDirection: "row", alignItems: "center", gap: 8,
     },
     errorText: { color: "#ff6666", fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
     primaryBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 14,
-      paddingVertical: 16,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      marginTop: 8,
+      backgroundColor: colors.primary, borderRadius: 14,
+      paddingVertical: 16, alignItems: "center", justifyContent: "center",
+      flexDirection: "row", gap: 8, marginTop: 8,
     },
     primaryBtnDisabled: { opacity: 0.6 },
     primaryBtnText: { color: colors.primaryForeground, fontSize: 16, fontFamily: "Inter_700Bold" },
-    dividerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      marginVertical: 24,
-    },
+    dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 24 },
     dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
     dividerText: { color: colors.mutedForeground, fontSize: 12, fontFamily: "Inter_400Regular" },
     signupBtn: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 14,
-      paddingVertical: 15,
-      alignItems: "center",
+      borderWidth: 1.5, borderColor: colors.border,
+      borderRadius: 14, paddingVertical: 15, alignItems: "center",
     },
     signupText: { color: colors.foreground, fontSize: 15, fontFamily: "Inter_500Medium" },
+    forgotRow: { alignItems: "flex-end", marginTop: -8, marginBottom: 16 },
+    forgotText: { color: colors.primary, fontSize: 13, fontFamily: "Inter_500Medium" },
   });
-
-  const canSubmit = email.trim().length > 0 && password.length >= 8;
 
   return (
     <KeyboardAvoidingView
@@ -169,7 +143,7 @@ export default function LoginScreen() {
         )}
 
         <Text style={s.label}>Email</Text>
-        <View style={s.inputWrap}>
+        <View style={[s.inputWrap, focusedField === "email" && s.inputWrapFocused]}>
           <TextInput
             style={s.input}
             value={email}
@@ -180,12 +154,17 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoComplete="email"
             autoCorrect={false}
+            returnKeyType="next"
+            onFocus={() => setFocusedField("email")}
+            onBlur={() => setFocusedField(null)}
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
         </View>
 
         <Text style={s.label}>Password</Text>
-        <View style={s.inputWrap}>
+        <View style={[s.inputWrap, focusedField === "password" && s.inputWrapFocused]}>
           <TextInput
+            ref={passwordRef}
             style={s.input}
             value={password}
             onChangeText={setPassword}
@@ -193,20 +172,19 @@ export default function LoginScreen() {
             placeholderTextColor={colors.mutedForeground}
             secureTextEntry={!showPassword}
             autoComplete="password"
-            onSubmitEditing={handleLogin}
             returnKeyType="go"
+            onFocus={() => setFocusedField("password")}
+            onBlur={() => setFocusedField(null)}
+            onSubmitEditing={handleLogin}
           />
-          <TouchableOpacity
-            style={s.eyeBtn}
-            onPress={() => setShowPassword((v) => !v)}
-          >
-            <Feather
-              name={showPassword ? "eye-off" : "eye"}
-              size={18}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={s.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+            <Feather name={showPassword ? "eye-off" : "eye"} size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity style={s.forgotRow}>
+          <Text style={s.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[s.primaryBtn, (!canSubmit || loading) && s.primaryBtnDisabled]}
@@ -230,11 +208,7 @@ export default function LoginScreen() {
           <View style={s.dividerLine} />
         </View>
 
-        <TouchableOpacity
-          style={s.signupBtn}
-          onPress={() => router.push("/auth/signup")}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={s.signupBtn} onPress={() => router.push("/auth/signup")} activeOpacity={0.8}>
           <Text style={s.signupText}>Create an account</Text>
         </TouchableOpacity>
       </ScrollView>

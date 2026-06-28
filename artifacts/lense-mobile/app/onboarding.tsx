@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/authContext";
+import * as Haptics from "expo-haptics";
 
 const SPORTS = [
   "Powerlifting", "Olympic Weightlifting", "Running", "Swimming",
@@ -72,6 +73,7 @@ export default function OnboardingScreen() {
   }
 
   async function handleContinue() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (step < TOTAL_STEPS) {
       setStep((s) => s + 1);
     } else {
@@ -82,6 +84,7 @@ export default function OnboardingScreen() {
           goals: state.goals,
           injuryConcerns: state.injuries,
         });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {
         // non-critical — continue anyway
       }
@@ -255,6 +258,11 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           )}
           <Text style={s.stepLabel}>{step} of {TOTAL_STEPS}</Text>
+          {step < TOTAL_STEPS && (
+            <TouchableOpacity onPress={() => router.replace("/(tabs)" as any)} activeOpacity={0.7}>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: "Inter_400Regular" }}>Skip</Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={s.progressBg}>
           <View style={[s.progressFill, { width: `${progressPct}%` as any }]} />

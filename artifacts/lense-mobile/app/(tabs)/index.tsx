@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 
 import { useAuth, useTier } from "@/lib/authContext";
 import { analyses as analysesApi, achievements as achievementsApi, type AnalysisRecord, type AchievementRecord } from "@/lib/api";
@@ -89,7 +90,13 @@ export default function HomeScreen() {
             <Text style={s.dateLabel}>{dateLabel()}</Text>
             <Text style={s.welcomeText}>Welcome back, {firstName}</Text>
           </View>
-          <TouchableOpacity style={s.avatar} onPress={() => {}}>
+          <TouchableOpacity
+            style={s.avatar}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(tabs)/profile" as any);
+            }}
+          >
             <Feather name="user" size={20} color={C.textSecondary} />
             {tier === "pro" && <View style={s.avatarBadge} />}
           </TouchableOpacity>

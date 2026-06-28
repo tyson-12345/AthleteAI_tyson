@@ -22,6 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { analyses as analysesApi, type AnalysisRecord, ApiError } from "@/lib/api";
 import { useAuth, useCanAccessFeature } from "@/lib/authContext";
+import * as Haptics from "expo-haptics";
 
 const SPORTS = [
   "Weightlifting", "Running", "Basketball", "Golf", "Tennis",
@@ -316,6 +317,29 @@ export default function AnalyzeScreen() {
             <TouchableOpacity
               style={s.card}
               onPress={() => !isProcessing && router.push(`/analysis/${item.id}`)}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                Alert.alert(
+                  item.title,
+                  "What would you like to do?",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: async () => {
+                        try {
+                          await analysesApi.delete(item.id);
+                          setAnalysisList((prev) => prev.filter((a) => a.id !== item.id));
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        } catch {
+                          Alert.alert("Couldn't delete", "Please try again.");
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
               activeOpacity={isProcessing ? 1 : 0.85}
             >
               <View style={s.cardBody}>

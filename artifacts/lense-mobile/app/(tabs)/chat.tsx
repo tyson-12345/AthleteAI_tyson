@@ -6,19 +6,32 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Alert,
+  Clipboard,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
 import { chat as chatApi, type ChatRecord, ApiError } from "@/lib/api";
 import { useCanAccessFeature } from "@/lib/authContext";
 import colors from "@/constants/colors";
 
 const C = colors.light;
+
+const QUICK_PROMPTS = [
+  "How do I improve my technique?",
+  "What's my biggest weakness?",
+  "Give me a drill for today",
+  "How do I prevent injury?",
+  "Explain my latest scores",
+];
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -29,9 +42,12 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const bottomInset = Platform.OS === "web" ? 34 + 84 : insets.bottom + 84 + 4;
 
   const loadHistory = useCallback(async () => {
     if (!canChat) { setLoading(false); return; }
@@ -39,7 +55,7 @@ export default function ChatScreen() {
       const { messages: msgs } = await chatApi.history();
       setMessages(msgs);
     } catch {
-      // ignore
+      // ignore network errors — show empty state
     } finally {
       setLoading(false);
     }
@@ -47,9 +63,9 @@ export default function ChatScreen() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  async function sendMessage() {
-    if (!input.trim() || sending) return;
-    const content = input.trim();
+  async function sendMessage(text?: string) {
+    const content = (text ?? input).trim();
+    if (!content || sending) return;
     setInput("");
 
     const optimistic: ChatRecord = {
@@ -60,6 +76,7 @@ export default function ChatScreen() {
     };
     setMessages((prev) => [...prev, optimistic]);
     setSending(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const { userMessage, assistantMessage } = await chatApi.send(content);
@@ -72,10 +89,37 @@ export default function ChatScreen() {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       if (e instanceof ApiError && e.code === "UPGRADE_REQUIRED") {
         router.push("/pricing");
+      } else {
+        Alert.alert("Couldn't send message", "Please check your connection and try again.");
       }
     } finally {
       setSending(false);
     }
+  }
+
+  function handleLongPress(msg: ChatRecord) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Clipboard.setString(msg.content);
+    setCopiedId(msg.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  function handleClear() {
+    Alert.alert(
+      "Clear conversation",
+      "This will delete your entire chat history with Atlas. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            await chatApi.clear();
+            setMessages([]);
+          },
+        },
+      ]
+    );
   }
 
   if (!canChat) {
@@ -110,9 +154,15 @@ export default function ChatScreen() {
   }
 
   const canSend = input.trim().length > 0 && !sending;
+  const showQuickPrompts = messages.length === 0 && !sending;
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
+      {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 16 }]}>
         <View style={s.headerLeft}>
           <View style={s.coachAvatar}>
@@ -123,9 +173,11 @@ export default function ChatScreen() {
             <Text style={s.headerSub}>● Online</Text>
           </View>
         </View>
-        <TouchableOpacity style={s.clearBtn} onPress={async () => { await chatApi.clear(); setMessages([]); }}>
-          <Feather name="trash-2" size={18} color={C.textSecondary} />
-        </TouchableOpacity>
+        {messages.length > 0 && (
+          <TouchableOpacity style={s.clearBtn} onPress={handleClear}>
+            <Feather name="trash-2" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -139,42 +191,87 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
             const isUser = item.role === "user";
+            const isCopied = copiedId === item.id;
             return (
-              <View style={s.msgRow}>
-                <View style={[s.bubble, isUser ? s.userBubble : s.assistantBubble]}>
-                  <Text style={isUser ? s.userText : s.assistantText}>{item.content}</Text>
+              <TouchableWithoutFeedback onLongPress={() => handleLongPress(item)}>
+                <View style={s.msgRow}>
+                  {!isUser && (
+                    <View style={s.coachDot}>
+                      <Feather name="cpu" size={12} color={C.volt} />
+                    </View>
+                  )}
+                  <View style={[s.bubble, isUser ? s.userBubble : s.assistantBubble]}>
+                    <Text style={isUser ? s.userText : s.assistantText}>{item.content}</Text>
+                    {isCopied && (
+                      <Text style={s.copiedLabel}>Copied!</Text>
+                    )}
+                  </View>
                 </View>
-              </View>
+              </TouchableWithoutFeedback>
             );
           }}
           ListEmptyComponent={
             <View style={{ padding: 32, alignItems: "center", gap: 12 }}>
-              <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: "rgba(198,255,58,0.1)", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="message-circle" size={28} color={C.volt} />
+              <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: "rgba(198,255,58,0.1)", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="message-circle" size={32} color={C.volt} />
               </View>
-              <Text style={{ fontFamily: "Archivo_800ExtraBold", fontSize: 20, color: C.textPrimary, textAlign: "center" }}>Ask Atlas anything</Text>
+              <Text style={{ fontFamily: "Archivo_800ExtraBold", fontSize: 22, color: C.textPrimary, textAlign: "center", letterSpacing: -0.5 }}>
+                Ask Atlas anything
+              </Text>
               <Text style={{ color: C.textSecondary, fontFamily: "Inter_400Regular", fontSize: 14, textAlign: "center", lineHeight: 20 }}>
                 Form feedback, drill recommendations, recovery tips — your AI coach is here.
               </Text>
             </View>
           }
-          ListFooterComponent={sending ? (
-            <View style={s.msgRow}>
-              <View style={s.typingBubble}>
-                <View style={s.typingDot} />
-                <View style={s.typingDot} />
-                <View style={s.typingDot} />
-              </View>
-            </View>
-          ) : null}
+          ListFooterComponent={
+            <>
+              {sending && (
+                <View style={[s.msgRow, { paddingBottom: 4 }]}>
+                  <View style={s.coachDot}>
+                    <Feather name="cpu" size={12} color={C.volt} />
+                  </View>
+                  <View style={s.typingBubble}>
+                    <View style={s.typingDot} />
+                    <View style={[s.typingDot, { opacity: 0.6 }]} />
+                    <View style={[s.typingDot, { opacity: 0.3 }]} />
+                  </View>
+                </View>
+              )}
+              <View style={{ height: 12 }} />
+            </>
+          }
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 12, flexGrow: 1 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 8, flexGrow: 1 }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
       )}
 
-      <View style={[s.inputRow, { paddingBottom: 10 + (Platform.OS === "web" ? 84 + 34 : insets.bottom + 84 + 4) }]}>
+      {/* Quick prompts */}
+      {showQuickPrompts && (
+        <View style={s.quickPromptsRow}>
+          <FlatList
+            data={QUICK_PROMPTS}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={s.quickChip}
+                onPress={() => sendMessage(item)}
+                activeOpacity={0.75}
+              >
+                <Text style={s.quickChipText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+
+      {/* Input row */}
+      <View style={[s.inputRow, { paddingBottom: 10 + bottomInset }]}>
         <TextInput
+          ref={inputRef}
           style={s.textInput}
           value={input}
           onChangeText={setInput}
@@ -182,20 +279,20 @@ export default function ChatScreen() {
           placeholderTextColor={C.textTertiary}
           multiline
           returnKeyType="send"
-          onSubmitEditing={sendMessage}
+          onSubmitEditing={() => sendMessage()}
           blurOnSubmit={false}
           editable={!sending}
         />
         <TouchableOpacity
           style={[s.sendBtn, !canSend && s.sendBtnDisabled]}
-          onPress={sendMessage}
+          onPress={() => sendMessage()}
           disabled={!canSend}
           activeOpacity={0.8}
         >
           {sending ? (
             <ActivityIndicator color={C.ink} size="small" />
           ) : (
-            <Feather name="send" size={16} color={C.ink} />
+            <Feather name="send" size={16} color={canSend ? C.ink : C.textTertiary} />
           )}
         </TouchableOpacity>
       </View>
@@ -206,26 +303,19 @@ export default function ChatScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 14,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   coachAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: "rgba(198,255,58,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.textPrimary },
   headerSub: { fontSize: 12, color: C.success, fontFamily: "Inter_400Regular" },
-  clearBtn: { padding: 4 },
+  clearBtn: { padding: 8 },
   paywall: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
   paywallIcon: {
     width: 72, height: 72, borderRadius: 36,
@@ -240,36 +330,44 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8,
   },
   upgradeBtnText: { color: C.ink, fontSize: 15, fontFamily: "Inter_700Bold" },
-  msgRow: { paddingHorizontal: 16, paddingVertical: 6 },
-  bubble: { maxWidth: "80%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  userBubble: { alignSelf: "flex-end", backgroundColor: C.volt, borderBottomRightRadius: 4 },
+  coachDot: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: "rgba(198,255,58,0.12)",
+    alignItems: "center", justifyContent: "center",
+    alignSelf: "flex-end", marginRight: 8,
+  },
+  msgRow: { paddingHorizontal: 16, paddingVertical: 4, flexDirection: "row", alignItems: "flex-end" },
+  bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  userBubble: { alignSelf: "flex-end", backgroundColor: C.volt, borderBottomRightRadius: 4, marginLeft: "auto" as any },
   assistantBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: C.surface2,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: C.border,
+    alignSelf: "flex-start", backgroundColor: C.surface2,
+    borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.border,
   },
   userText: { color: C.ink, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
   assistantText: { color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  copiedLabel: { fontSize: 10, color: C.textTertiary, fontFamily: "Inter_500Medium", marginTop: 4, textAlign: "right" },
   typingBubble: {
-    alignSelf: "flex-start", backgroundColor: C.surface2,
-    borderRadius: 18, borderBottomLeftRadius: 4,
+    backgroundColor: C.surface2, borderRadius: 18, borderBottomLeftRadius: 4,
     borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 16, paddingVertical: 12,
-    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 16, paddingVertical: 14,
+    flexDirection: "row", alignItems: "center", gap: 5,
   },
-  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.textSecondary },
+  typingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.textSecondary },
+  quickPromptsRow: { paddingBottom: 10, paddingTop: 4 },
+  quickChip: {
+    backgroundColor: C.surface2, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: C.border,
+  },
+  quickChipText: { fontSize: 13, color: C.textPrimary, fontFamily: "Inter_400Regular" },
   inputRow: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,
     paddingHorizontal: 16, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: C.border,
-    backgroundColor: C.background,
+    borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.background,
   },
   textInput: {
-    flex: 1, backgroundColor: C.surface2,
-    borderRadius: 22, paddingHorizontal: 16,
-    paddingTop: 10, paddingBottom: 10,
+    flex: 1, backgroundColor: C.surface2, borderRadius: 22,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10,
     color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular",
     borderWidth: 1, borderColor: C.border, maxHeight: 100,
   },
