@@ -11,9 +11,9 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
-  Clipboard,
   Animated,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -21,9 +21,7 @@ import * as Haptics from "expo-haptics";
 
 import { chat as chatApi, type ChatRecord, ApiError } from "@/lib/api";
 import { useCanAccessFeature } from "@/lib/authContext";
-import colors from "@/constants/colors";
-
-const C = colors.light;
+import { useColors } from "@/hooks/useColors";
 
 const QUICK_PROMPTS = [
   "How do I improve my technique?",
@@ -37,6 +35,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const canChat = useCanAccessFeature("aiChat");
+  const C = useColors();
 
   const [messages, setMessages] = useState<ChatRecord[]>([]);
   const [input, setInput] = useState("");
@@ -97,9 +96,9 @@ export default function ChatScreen() {
     }
   }
 
-  function handleLongPress(msg: ChatRecord) {
+  async function handleLongPress(msg: ChatRecord) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Clipboard.setString(msg.content);
+    await Clipboard.setStringAsync(msg.content);
     setCopiedId(msg.id);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -121,6 +120,84 @@ export default function ChatScreen() {
       ]
     );
   }
+
+  const s = StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    header: {
+      paddingHorizontal: 20, paddingBottom: 14,
+      borderBottomWidth: 1, borderBottomColor: C.border,
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    },
+    headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+    coachAvatar: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: C.volt + "26",
+      alignItems: "center", justifyContent: "center",
+    },
+    headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.textPrimary },
+    headerSub: { fontSize: 12, color: C.success, fontFamily: "Inter_400Regular" },
+    clearBtn: { padding: 8 },
+    paywall: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
+    paywallIcon: {
+      width: 72, height: 72, borderRadius: 36,
+      backgroundColor: C.volt + "1F",
+      alignItems: "center", justifyContent: "center", marginBottom: 20,
+    },
+    paywallTitle: { fontSize: 22, fontFamily: "Archivo_800ExtraBold", color: C.textPrimary, textAlign: "center", marginBottom: 10 },
+    paywallSub: { fontSize: 14, color: C.textSecondary, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 28 },
+    upgradeBtn: {
+      backgroundColor: C.volt, borderRadius: 14,
+      paddingVertical: 14, paddingHorizontal: 32,
+      flexDirection: "row", alignItems: "center", gap: 8,
+    },
+    upgradeBtnText: { color: C.ink, fontSize: 15, fontFamily: "Inter_700Bold" },
+    coachDot: {
+      width: 26, height: 26, borderRadius: 13,
+      backgroundColor: C.volt + "1F",
+      alignItems: "center", justifyContent: "center",
+      alignSelf: "flex-end", marginRight: 8,
+    },
+    msgRow: { paddingHorizontal: 16, paddingVertical: 4, flexDirection: "row", alignItems: "flex-end" },
+    bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+    userBubble: { alignSelf: "flex-end", backgroundColor: C.volt, borderBottomRightRadius: 4, marginLeft: "auto" as any },
+    assistantBubble: {
+      alignSelf: "flex-start", backgroundColor: C.surface2,
+      borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.border,
+    },
+    userText: { color: C.ink, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+    assistantText: { color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+    copiedLabel: { fontSize: 10, color: C.textTertiary, fontFamily: "Inter_500Medium", marginTop: 4, textAlign: "right" },
+    typingBubble: {
+      backgroundColor: C.surface2, borderRadius: 18, borderBottomLeftRadius: 4,
+      borderWidth: 1, borderColor: C.border,
+      paddingHorizontal: 16, paddingVertical: 14,
+      flexDirection: "row", alignItems: "center", gap: 5,
+    },
+    typingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.textSecondary },
+    quickPromptsRow: { paddingBottom: 10, paddingTop: 4 },
+    quickChip: {
+      backgroundColor: C.surface2, borderRadius: 20,
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderWidth: 1, borderColor: C.border,
+    },
+    quickChipText: { fontSize: 13, color: C.textPrimary, fontFamily: "Inter_400Regular" },
+    inputRow: {
+      flexDirection: "row", alignItems: "flex-end", gap: 10,
+      paddingHorizontal: 16, paddingTop: 10,
+      borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.background,
+    },
+    textInput: {
+      flex: 1, backgroundColor: C.surface2, borderRadius: 22,
+      paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10,
+      color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular",
+      borderWidth: 1, borderColor: C.border, maxHeight: 100,
+    },
+    sendBtn: {
+      width: 42, height: 42, borderRadius: 21,
+      backgroundColor: C.volt, alignItems: "center", justifyContent: "center",
+    },
+    sendBtnDisabled: { backgroundColor: C.surface3 },
+  });
 
   if (!canChat) {
     return (
@@ -212,7 +289,7 @@ export default function ChatScreen() {
           }}
           ListEmptyComponent={
             <View style={{ padding: 32, alignItems: "center", gap: 12 }}>
-              <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: "rgba(198,255,58,0.1)", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: C.volt + "1A", alignItems: "center", justifyContent: "center" }}>
                 <Feather name="message-circle" size={32} color={C.volt} />
               </View>
               <Text style={{ fontFamily: "Archivo_800ExtraBold", fontSize: 22, color: C.textPrimary, textAlign: "center", letterSpacing: -0.5 }}>
@@ -299,81 +376,3 @@ export default function ChatScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.background },
-  header: {
-    paddingHorizontal: 20, paddingBottom: 14,
-    borderBottomWidth: 1, borderBottomColor: C.border,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  coachAvatar: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "rgba(198,255,58,0.15)",
-    alignItems: "center", justifyContent: "center",
-  },
-  headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.textPrimary },
-  headerSub: { fontSize: 12, color: C.success, fontFamily: "Inter_400Regular" },
-  clearBtn: { padding: 8 },
-  paywall: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
-  paywallIcon: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: "rgba(198,255,58,0.12)",
-    alignItems: "center", justifyContent: "center", marginBottom: 20,
-  },
-  paywallTitle: { fontSize: 22, fontFamily: "Archivo_800ExtraBold", color: C.textPrimary, textAlign: "center", marginBottom: 10 },
-  paywallSub: { fontSize: 14, color: C.textSecondary, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 28 },
-  upgradeBtn: {
-    backgroundColor: C.volt, borderRadius: 14,
-    paddingVertical: 14, paddingHorizontal: 32,
-    flexDirection: "row", alignItems: "center", gap: 8,
-  },
-  upgradeBtnText: { color: C.ink, fontSize: 15, fontFamily: "Inter_700Bold" },
-  coachDot: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: "rgba(198,255,58,0.12)",
-    alignItems: "center", justifyContent: "center",
-    alignSelf: "flex-end", marginRight: 8,
-  },
-  msgRow: { paddingHorizontal: 16, paddingVertical: 4, flexDirection: "row", alignItems: "flex-end" },
-  bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  userBubble: { alignSelf: "flex-end", backgroundColor: C.volt, borderBottomRightRadius: 4, marginLeft: "auto" as any },
-  assistantBubble: {
-    alignSelf: "flex-start", backgroundColor: C.surface2,
-    borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.border,
-  },
-  userText: { color: C.ink, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  assistantText: { color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  copiedLabel: { fontSize: 10, color: C.textTertiary, fontFamily: "Inter_500Medium", marginTop: 4, textAlign: "right" },
-  typingBubble: {
-    backgroundColor: C.surface2, borderRadius: 18, borderBottomLeftRadius: 4,
-    borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 16, paddingVertical: 14,
-    flexDirection: "row", alignItems: "center", gap: 5,
-  },
-  typingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.textSecondary },
-  quickPromptsRow: { paddingBottom: 10, paddingTop: 4 },
-  quickChip: {
-    backgroundColor: C.surface2, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: C.border,
-  },
-  quickChipText: { fontSize: 13, color: C.textPrimary, fontFamily: "Inter_400Regular" },
-  inputRow: {
-    flexDirection: "row", alignItems: "flex-end", gap: 10,
-    paddingHorizontal: 16, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.background,
-  },
-  textInput: {
-    flex: 1, backgroundColor: C.surface2, borderRadius: 22,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10,
-    color: C.textPrimary, fontSize: 14, fontFamily: "Inter_400Regular",
-    borderWidth: 1, borderColor: C.border, maxHeight: 100,
-  },
-  sendBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: C.volt, alignItems: "center", justifyContent: "center",
-  },
-  sendBtnDisabled: { backgroundColor: C.surface3 },
-});

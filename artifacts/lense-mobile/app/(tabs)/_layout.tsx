@@ -4,48 +4,48 @@ import React from "react";
 import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import colors from "@/constants/colors";
+import { useColors } from "@/hooks/useColors";
 
-const C = colors.light;
 const isIOS = Platform.OS === "ios";
 
-function VoltFAB({ focused }: { focused: boolean }) {
+function VoltFAB({ focused, voltColor, inkColor }: { focused: boolean; voltColor: string; inkColor: string }) {
   return (
     <View
       style={{
         width: 60,
         height: 60,
         borderRadius: 20,
-        backgroundColor: focused ? "#aee62e" : C.volt,
+        backgroundColor: focused ? "#aee62e" : voltColor,
         alignItems: "center",
         justifyContent: "center",
         marginTop: -22,
-        shadowColor: C.volt,
+        shadowColor: voltColor,
         shadowOpacity: 0.55,
         shadowRadius: 16,
         shadowOffset: { width: 0, height: 8 },
         elevation: 10,
       }}
     >
-      <Feather name="plus" size={28} color={C.ink} />
+      <Feather name="plus" size={28} color={inkColor} />
     </View>
   );
 }
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const C = useColors();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: C.volt,
-        tabBarInactiveTintColor: "#5b6472",
+        tabBarInactiveTintColor: C.textTertiary,
         tabBarStyle: {
           height: 84 + (isIOS ? insets.bottom : 0),
-          backgroundColor: "#0C0F12",
+          backgroundColor: C.surface2,
           borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.07)",
+          borderTopColor: C.border,
           elevation: 0,
           position: "absolute",
           overflow: "visible",
@@ -80,7 +80,7 @@ export default function TabLayout() {
         name="analyze"
         options={{
           title: "",
-          tabBarIcon: ({ focused }) => <VoltFAB focused={focused} />,
+          tabBarIcon: ({ focused }) => <VoltFAB focused={focused} voltColor={C.volt} inkColor={C.ink} />,
           tabBarLabel: () => null,
         }}
       />

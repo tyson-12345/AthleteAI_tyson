@@ -24,6 +24,8 @@ import { ActivityIndicator, View } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/lib/authContext";
+import { ThemeProvider, useTheme } from "@/lib/themeContext";
+import colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,10 +33,12 @@ const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading } = useAuth();
+  const { theme } = useTheme();
+  const bg = theme === "dark" ? colors.dark.background : colors.light.background;
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#07090B", alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#C6FF3A" size="large" />
       </View>
     );
@@ -44,6 +48,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayoutNav() {
+  const { theme } = useTheme();
+  const C = theme === "dark" ? colors.dark : colors.light;
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -56,8 +62,8 @@ function RootLayoutNav() {
         name="analysis/[id]"
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: "#07090B" },
-          headerTintColor: "#F5F5F5",
+          headerStyle: { backgroundColor: C.background },
+          headerTintColor: C.textPrimary,
           headerTitle: "Analysis",
           headerBackTitle: "Back",
         }}
@@ -93,17 +99,19 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#07090B" }}>
-              <KeyboardProvider>
-                <AuthGate>
-                  <RootLayoutNav />
-                </AuthGate>
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </QueryClientProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider>
+                  <AuthGate>
+                    <RootLayoutNav />
+                  </AuthGate>
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </QueryClientProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

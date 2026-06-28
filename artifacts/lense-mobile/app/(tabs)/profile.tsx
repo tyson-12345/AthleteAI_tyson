@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -16,9 +17,8 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 import { useAuth, useTier } from "@/lib/authContext";
-import colors from "@/constants/colors";
-
-const C = colors.light;
+import { useColors } from "@/hooks/useColors";
+import { useTheme } from "@/lib/themeContext";
 
 const SPORTS = [
   "Powerlifting", "Olympic Weightlifting", "Running", "Swimming",
@@ -34,6 +34,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, logout, updateProfile } = useAuth();
   const tier = useTier();
+  const C = useColors();
+  const { isDark, toggleTheme } = useTheme();
 
   const [editModal, setEditModal] = useState<"name" | "sport" | "level" | "goal" | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -71,6 +73,51 @@ export default function ProfileScreen() {
 
   const SPORT_DISPLAY = (profile?.sport ?? "Not set").replace(/\b\w/g, (c) => c.toUpperCase());
   const LEVEL_DISPLAY = (profile?.level ?? "Not set").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const s = StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    header: { paddingHorizontal: 20, paddingBottom: 16 },
+    pageTitle: { fontFamily: "Archivo_800ExtraBold", fontSize: 28, color: C.textPrimary, letterSpacing: -0.5 },
+    identityCard: { flexDirection: "row", alignItems: "center", gap: 16, marginHorizontal: 20, marginBottom: 16, backgroundColor: C.surface2, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: C.border },
+    avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: C.volt + "26", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: C.volt },
+    avatarText: { fontFamily: "Archivo_800ExtraBold", fontSize: 22, color: C.volt },
+    avatarEditBadge: { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: C.volt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: C.surface2 },
+    nameText: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.textPrimary },
+    emailText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary, marginTop: 2 },
+    tierBadge: { alignSelf: "flex-start", backgroundColor: C.volt + "22", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
+    tierText: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1, color: C.volt },
+    statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20, marginBottom: 16 },
+    statCard: { flex: 1, backgroundColor: C.surface2, borderRadius: 16, padding: 14, alignItems: "center", borderWidth: 1, borderColor: C.border },
+    statValue: { fontFamily: "Archivo_800ExtraBold", fontSize: 20, color: C.textPrimary, letterSpacing: -0.5 },
+    statLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 9, letterSpacing: 1, color: C.textSecondary, marginTop: 4, textAlign: "center" },
+    section: { paddingHorizontal: 20, marginBottom: 16 },
+    sectionLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1.5, color: C.textTertiary, marginBottom: 10 },
+    settingsCard: { backgroundColor: C.surface2, borderRadius: 18, borderWidth: 1, borderColor: C.border, overflow: "hidden" },
+    settingsRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+    settingsRowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
+    settingsIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: C.surface3, alignItems: "center", justifyContent: "center" },
+    settingsLabel: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, color: C.textPrimary },
+    settingsValue: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textSecondary, marginTop: 1 },
+    upgradeCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: C.volt, borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+    upgradeTitle: { fontFamily: "Inter_700Bold", fontSize: 14, color: C.ink },
+    upgradeSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(7,9,11,0.7)", marginTop: 1 },
+    signOutBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.surface2, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: C.border },
+    signOutText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.destructive },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+    modalCard: { backgroundColor: C.surface2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" },
+    modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+    modalTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: C.textPrimary },
+    modalInput: {
+      backgroundColor: C.surface3, borderRadius: 12, borderWidth: 1,
+      borderColor: C.border, paddingHorizontal: 16, paddingVertical: 14,
+      color: C.textPrimary, fontSize: 15, fontFamily: "Inter_400Regular", marginBottom: 16,
+    },
+    modalSaveBtn: { backgroundColor: C.volt, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
+    modalSaveBtnText: { color: C.ink, fontSize: 15, fontFamily: "Inter_700Bold" },
+    optionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.border },
+    optionText: { fontFamily: "Inter_500Medium", fontSize: 16, color: C.textSecondary },
+    optionTextActive: { color: C.textPrimary, fontFamily: "Inter_600SemiBold" },
+  });
 
   return (
     <View style={s.container}>
@@ -121,7 +168,7 @@ export default function ProfileScreen() {
                   return (
                     <TouchableOpacity
                       key={sport}
-                      style={[s.optionRow, active && s.optionRowActive]}
+                      style={s.optionRow}
                       onPress={() => saveEdit(sport)}
                       activeOpacity={0.75}
                     >
@@ -140,7 +187,7 @@ export default function ProfileScreen() {
                   return (
                     <TouchableOpacity
                       key={level}
-                      style={[s.optionRow, active && s.optionRowActive]}
+                      style={s.optionRow}
                       onPress={() => saveEdit(level)}
                       activeOpacity={0.75}
                     >
@@ -184,7 +231,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Stats — tappable */}
+        {/* Stats */}
         <View style={s.statsRow}>
           <View style={s.statCard}>
             <Text style={s.statValue}>{profile?.streakDays ?? 0}</Text>
@@ -240,6 +287,23 @@ export default function ProfileScreen() {
         <View style={s.section}>
           <Text style={s.sectionLabel}>APP</Text>
           <View style={s.settingsCard}>
+            {/* Theme toggle */}
+            <View style={[s.settingsRow, s.settingsRowBorder]}>
+              <View style={s.settingsIcon}>
+                <Feather name={isDark ? "moon" : "sun"} size={17} color={C.textSecondary} />
+              </View>
+              <Text style={s.settingsLabel}>{isDark ? "Dark Mode" : "Light Mode"}</Text>
+              <Switch
+                value={isDark}
+                onValueChange={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  toggleTheme();
+                }}
+                trackColor={{ false: C.surface3, true: C.volt }}
+                thumbColor={isDark ? C.ink : C.surface4}
+                ios_backgroundColor={C.surface3}
+              />
+            </View>
             {[
               { icon: "bell" as const, label: "Notifications", onPress: () => Alert.alert("Notifications", "Notification settings coming soon.") },
               { icon: "shield" as const, label: "Privacy Policy", onPress: () => Alert.alert("Privacy", "Visit athleteai.app/privacy") },
@@ -280,50 +344,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.background },
-  header: { paddingHorizontal: 20, paddingBottom: 16 },
-  pageTitle: { fontFamily: "Archivo_800ExtraBold", fontSize: 28, color: C.textPrimary, letterSpacing: -0.5 },
-  identityCard: { flexDirection: "row", alignItems: "center", gap: 16, marginHorizontal: 20, marginBottom: 16, backgroundColor: C.surface2, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(198,255,58,0.15)", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: C.volt },
-  avatarText: { fontFamily: "Archivo_800ExtraBold", fontSize: 22, color: C.volt },
-  avatarEditBadge: { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: C.volt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: C.surface2 },
-  nameText: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.textPrimary },
-  emailText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSecondary, marginTop: 2 },
-  tierBadge: { alignSelf: "flex-start", backgroundColor: "rgba(198,255,58,0.14)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
-  tierText: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1, color: C.volt },
-  statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 20, marginBottom: 16 },
-  statCard: { flex: 1, backgroundColor: C.surface2, borderRadius: 16, padding: 14, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
-  statValue: { fontFamily: "Archivo_800ExtraBold", fontSize: 20, color: C.textPrimary, letterSpacing: -0.5 },
-  statLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 9, letterSpacing: 1, color: C.textSecondary, marginTop: 4, textAlign: "center" },
-  section: { paddingHorizontal: 20, marginBottom: 16 },
-  sectionLabel: { fontFamily: "SpaceMono_700Bold", fontSize: 10, letterSpacing: 1.5, color: C.textTertiary, marginBottom: 10 },
-  settingsCard: { backgroundColor: C.surface2, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", overflow: "hidden" },
-  settingsRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  settingsRowBorder: { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" },
-  settingsIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: C.surface3, alignItems: "center", justifyContent: "center" },
-  settingsLabel: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 15, color: C.textPrimary },
-  settingsValue: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textSecondary, marginTop: 1 },
-  upgradeCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: C.volt, borderRadius: 18, padding: 16, flexDirection: "row", alignItems: "center", gap: 12 },
-  upgradeTitle: { fontFamily: "Inter_700Bold", fontSize: 14, color: C.ink },
-  upgradeSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(7,9,11,0.7)", marginTop: 1 },
-  signOutBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.surface2, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" },
-  signOutText: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.destructive },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: C.surface2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
-  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 17, color: C.textPrimary },
-  modalInput: {
-    backgroundColor: C.surface3, borderRadius: 12, borderWidth: 1,
-    borderColor: C.border, paddingHorizontal: 16, paddingVertical: 14,
-    color: C.textPrimary, fontSize: 15, fontFamily: "Inter_400Regular", marginBottom: 16,
-  },
-  modalSaveBtn: { backgroundColor: C.volt, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
-  modalSaveBtnText: { color: C.ink, fontSize: 15, fontFamily: "Inter_700Bold" },
-  optionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)" },
-  optionRowActive: { },
-  optionText: { fontFamily: "Inter_500Medium", fontSize: 16, color: C.textSecondary },
-  optionTextActive: { color: C.textPrimary, fontFamily: "Inter_600SemiBold" },
-});

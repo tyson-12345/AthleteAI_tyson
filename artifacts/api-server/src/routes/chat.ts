@@ -44,7 +44,7 @@ router.post("/chat", authenticate, async (req: AuthRequest, res) => {
     .where(eq(subscriptionsTable.userId, req.userId!))
     .limit(1);
 
-  if (subscription?.tier === "free") {
+  if (!subscription || subscription.tier === "free") {
     res.status(403).json({
       error: "AI Coach requires Pro plan",
       code: "UPGRADE_REQUIRED",
@@ -104,7 +104,11 @@ router.post("/chat", authenticate, async (req: AuthRequest, res) => {
             technique: recentAnalysis.techniqueScore ?? 0,
             power: recentAnalysis.powerScore ?? 0,
             balance: recentAnalysis.balanceScore ?? 0,
+            consistency: recentAnalysis.consistencyScore ?? 0,
+            mobility: recentAnalysis.mobilityScore ?? 0,
+            speed: recentAnalysis.speedScore ?? 0,
           },
+          strengths: (recentAnalysis.strengths as string[]) ?? [],
           improvements: (recentAnalysis.improvements as string[]) ?? [],
         }
       : undefined,

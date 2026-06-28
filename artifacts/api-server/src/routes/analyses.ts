@@ -50,7 +50,7 @@ router.post("/analyses", authenticate, async (req: AuthRequest, res) => {
     .where(eq(subscriptionsTable.userId, req.userId!))
     .limit(1);
 
-  if (subscription?.tier === "free") {
+  if (!subscription || subscription.tier === "free") {
     const [{ total }] = await db
       .select({ total: count() })
       .from(analysesTable)
